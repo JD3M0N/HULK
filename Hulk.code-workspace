@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../CompetitiveProgramming"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"tuple": "cpp",
+			"iostream": "cpp",
+			"ostream": "cpp"
+		}
+	}
+}

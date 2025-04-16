@@ -1,5 +1,6 @@
-#include "Lexer.h"
+#include "lexer.h"
 #include <cctype>
+#include "../regex/regex.h"
 
 // Constructor
 Lexer::Lexer(const std::string &source) : source(source) {}
@@ -169,6 +170,29 @@ void Lexer::scanToken(std::vector<Token> &tokens)
     }
 }
 
+// Esta función intenta hallar el prefijo más largo (desde 'current') que coincide
+// completamente con el patrón definido en 'regex'. Se prueba cada posible longitud.
+std::string Lexer::matchRegexToken(const Regex &regex)
+{
+    std::string remainder = source.substr(current);
+    std::string bestMatch = "";
+    // Prueba todas las longitudes posibles (desde 1 hasta el largo de 'remainder')
+    for (size_t len = 1; len <= remainder.size(); ++len)
+    {
+        std::string candidate = remainder.substr(0, len);
+        if (regex.matches(candidate))
+        { // Si el candidato coincide por completo con el patrón
+            bestMatch = candidate;
+        }
+    }
+    // Si se encontró un match, se actualiza 'current' avanzando la cantidad de caracteres consumidos
+    if (!bestMatch.empty())
+    {
+        current += bestMatch.size();
+    }
+    return bestMatch;
+}
+
 // Es un number token
 void Lexer::numberToken(std::vector<Token> &tokens)
 {
@@ -196,23 +220,49 @@ void Lexer::identifierToken(std::vector<Token> &tokens)
     tokens.push_back(makeToken(TokenType::Identifier));
 }
 
-// Es un String token
 void Lexer::stringToken(std::vector<Token> &tokens)
 {
-    while (peek() != '"' && !isAtEnd())
-    {
-        if (peek() == '\n')
-            line++;
-        advance();
-    }
+    // Creamos un objeto Regex con el patrón para reconocer una secuencia:
+    // - Cualquier carácter (.) repetido cero o más veces, seguido de una comilla doble final.
+    // Nota: Nuestro motor simple entiende ".*\"" donde:
+    //   - '.' significa cualquier caracter.
+    //   - '.*' significa 0 o más repeticiones del comodín.
+    //   - '\"' es el literal de comilla doble.
+    Regex regexPattern(".*\"");
 
-    if (isAtEnd())
+    // Usamos la función auxiliar para hacer match del token de cadena desde la posición actual.
+    std::string matched = matchRegexToken(regexPattern);
+
+    // Si no se encontró match, es un error (la cadena no fue terminada).
+    if (matched.empty())
     {
         tokens.push_back(errorToken("Cadena no terminada."));
         return;
     }
 
-    advance(); // consume la comilla final
-
+    // En este punto, 'matched' contendrá el contenido de la cadena hasta (e incluyendo) la comilla final.
+    // Podemos decidir si queremos incluir las comillas en el lexema o extraer el contenido interior.
+    // Por simplicidad, usaremos la porción que ya está en 'matched'.
     tokens.push_back(makeToken(TokenType::String));
 }
+
+// // Es un String token
+// void Lexer::stringToken(std::vector<Token> &tokens)
+// {
+//     while (peek() != '"' && !isAtEnd())
+//     {
+//         if (peek() == '\n')
+//             line++;
+//         advance();
+//     }
+
+//     if (isAtEnd())
+//     {
+//         tokens.push_back(errorToken("Cadena no terminada."));
+//         return;
+//     }
+
+//     advance(); // consume la comilla final
+
+//     tokens.push_back(makeToken(TokenType::String));
+// }

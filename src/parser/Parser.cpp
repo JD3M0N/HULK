@@ -1,293 +1,206 @@
+// parser.cpp
+#include "parser.h"
 
-#include <iostream>
-#include <vector>
-#include <stack>
-#include <map>
-#include <string>
-#include <memory>
-#include <sstream>
-#include <cctype>
-
-using namespace std;
-
-// ————————————————
-// 1. Definición de símbolos
-// ————————————————
-enum Symbol
+// Constructor: inicializa y carga el primer token
+Parser::Parser(Lexer &lex) : lexer(lex)
 {
-    END,    // $
-    NUMBER, // literal numérico
-    PLUS,   // +
-    MINUS,  // -
-    STAR,   // *
-    SLASH,  // /
-    LPAREN, // (
-    RPAREN, // )
-    E,      // Expresión / E'
-    T,      // Término / T'
-    F       // Factor
-};
-
-struct ParseNode
-{
-    Symbol type;
-    string value;
-    vector<shared_ptr<ParseNode>> children;
-
-    ParseNode(Symbol t, string v = "") : type(t), value(v) {}
-};
-// ——————————————————————————————
-// 2. Producciones corregidas (ε = vector vacío)
-// ——————————————————————————————
-static const vector<pair<Symbol, vector<Symbol>>> productions = {
-    {E, {T, E}},              // 0: E → T E'
-    {E, {}},                   // 1: E' → ε
-    {E, {PLUS, T, E}},        // 2: E' → + T E'
-    {E, {MINUS, T, E}},       // 3: E' → - T E'
-    {T, {F, T}},              // 4: T → F T'
-    {T, {}},                   // 5: T' → ε
-    {T, {STAR, F, T}},        // 6: T' → * F T'
-    {T, {SLASH, F, T}},       // 7: T' → / F T'
-    {F, {LPAREN, E, RPAREN}}, // 8: F → ( E )
-    {F, {NUMBER}},            // 9: F → number
-    {F, {MINUS, F}}           // 10: F → - F
-};
-
-// Tabla ACTION [estado][símbolo] -> acción
-static const map<int, map<Symbol, string>> action_table = {
-    {0,  {{NUMBER, "s5"}, {MINUS, "s6"}, {LPAREN, "s4"}, {E, "1"}, {T, "2"}, {F, "3"}}},
-    {1,  {{PLUS, "s7"}, {MINUS, "s8"}, {END, "acc"}}},
-    {2,  {{PLUS, "r1"}, {MINUS, "r1"}, {STAR, "s9"}, {SLASH, "s10"}, {RPAREN, "r1"}, {END, "r1"}}},
-    {3,  {{PLUS, "r5"}, {MINUS, "r5"}, {STAR, "r5"}, {SLASH, "r5"}, {RPAREN, "r5"}, {END, "r5"}}},
-    {4,  {{NUMBER, "s5"}, {MINUS, "s6"}, {LPAREN, "s4"}, {E, "11"}, {T, "2"}, {F, "3"}}},
-    {5,  {{PLUS, "r9"}, {MINUS, "r9"}, {STAR, "r9"}, {SLASH, "r9"}, {RPAREN, "r9"}, {END, "r9"}}},
-    {6,  {{NUMBER, "s5"}, {MINUS, "s6"}, {LPAREN, "s4"}, {F, "12"}}},
-    {7,  {{NUMBER, "s5"}, {MINUS, "s6"}, {LPAREN, "s4"}, {T, "13"}, {F, "3"}}},
-    {8,  {{NUMBER, "s5"}, {MINUS, "s6"}, {LPAREN, "s4"}, {T, "14"}, {F, "3"}}},
-    {9,  {{NUMBER, "s5"}, {MINUS, "s6"}, {LPAREN, "s4"}, {F, "15"}}},
-    {10, {{NUMBER, "s5"}, {MINUS, "s6"}, {LPAREN, "s4"}, {F, "16"}}},
-    {11, {{PLUS, "s7"}, {MINUS, "s8"}, {RPAREN, "s17"}}},
-    {12, {{PLUS, "r10"}, {MINUS, "r10"}, {STAR, "r10"}, {SLASH, "r10"}, {RPAREN, "r10"}, {END, "r10"}}},
-    {13, {{PLUS, "r2"}, {MINUS, "r2"}, {STAR, "s9"}, {SLASH, "s10"}, {RPAREN, "r2"}, {END, "r2"}}}, // Fix: r2 para PLUS
-    {14, {{PLUS, "r3"}, {MINUS, "r3"}, {STAR, "s9"}, {SLASH, "s10"}, {RPAREN, "r3"}, {END, "r3"}}}, // Fix: r3 para PLUS
-    {15, {{PLUS, "r6"}, {MINUS, "r6"}, {STAR, "r6"}, {SLASH, "r6"}, {RPAREN, "r6"}, {END, "r6"}}},
-    {16, {{PLUS, "r7"}, {MINUS, "r7"}, {STAR, "r7"}, {SLASH, "r7"}, {RPAREN, "r7"}, {END, "r7"}}},
-    {17, {{PLUS, "r8"}, {MINUS, "r8"}, {STAR, "r8"}, {SLASH, "r8"}, {RPAREN, "r8"}, {END, "r8"}}}
-};
-
-// Tabla GOTO [estado][no-terminal] -> estado
-static const map<int, map<Symbol, int>> goto_table = {
-    {0,  {{E, 1}, {T, 2}, {F, 3}}},
-    {2,  {{E, -1}, {T, -1}, {F, -1}}}, // Fix: Evitar GOTO inválido
-    {4,  {{E, 11}, {T, 2}, {F, 3}}},
-    {6,  {{F, 12}}},
-    {7,  {{T, 13}, {F, 3}}},
-    {8,  {{T, 14}, {F, 3}}},
-    {9,  {{F, 15}}},
-    {10, {{F, 16}}},
-    {13, {{E, -1}, {T, -1}, {F, -1}}}, // Fix: Estados finales
-    {14, {{E, -1}, {T, -1}, {F, -1}}}
-};
-
-
-// ——————————————————————————————————————————————
-// 4. Tokenizador mejorado (ss.get + isspace para separar números)
-// ——————————————————————————————————————————————
-vector<pair<Symbol, string>> tokenize(const string &expr)
-{
-    vector<pair<Symbol, string>> tokens;
-    stringstream ss(expr);
-    char c;
-    string num_buf;
-
-    auto flush_number = [&]()
-    {
-        if (!num_buf.empty())
-        {
-            tokens.emplace_back(NUMBER, num_buf);
-            num_buf.clear();
-        }
-    };
-
-    while (ss.get(c))
-    {
-        if (isdigit(c) || c == '.')
-        {
-            num_buf += c;
-        }
-        else
-        {
-            // antes de procesar operador, vuelca número acumulado
-            flush_number();
-            if (isspace(static_cast<unsigned char>(c)))
-                continue;
-            switch (c)
-            {
-            case '+':
-                tokens.emplace_back(PLUS, "+");
-                break;
-            case '-':
-                tokens.emplace_back(MINUS, "-");
-                break;
-            case '*':
-                tokens.emplace_back(STAR, "*");
-                break;
-            case '/':
-                tokens.emplace_back(SLASH, "/");
-                break;
-            case '(':
-                tokens.emplace_back(LPAREN, "(");
-                break;
-            case ')':
-                tokens.emplace_back(RPAREN, ")");
-                break;
-            default:
-                throw runtime_error(string("Carácter inválido: ") + c);
-            }
-        }
-    }
-    flush_number();
-    tokens.emplace_back(END, "$");
-    return tokens;
+    advance();
 }
 
-// ——————————————————————————————————————————————
-// 5. Parser LR(0) bottom‑up
-// ——————————————————————————————————————————————
-class LRParser
+void Parser::advance()
 {
-    stack<int> state_stack;
-    stack<shared_ptr<ParseNode>> parse_stack;
-    vector<pair<Symbol, string>> input;
-    size_t pos = 0;
+    cur = lexer.nextToken();
+}
 
-public:
-    LRParser(const string &expr)
-    {
-        input = tokenize(expr);
-        state_stack.push(0);
-    }
-
-    shared_ptr<ParseNode> parse()
-    {
-        while (true)
-        {
-            int st = state_stack.top();
-            Symbol look = input[pos].first;
-
-            auto it = action_table.at(st).find(look);
-            if (it == action_table.at(st).end())
-                throw runtime_error("Error de sintaxis en token #" + to_string(pos));
-
-            const string &act = it->second;
-            if (act[0] == 's')
-            {
-                // — Shift —
-                int ns = stoi(act.substr(1));
-                state_stack.push(ns);
-                parse_stack.push(make_shared<ParseNode>(look, input[pos].second));
-                pos++;
-            }
-            else if (act[0] == 'r')
-            {
-                // — Reduce —
-                int pid = stoi(act.substr(1));
-                const auto &prod = productions[pid];
-                int k = prod.second.size();
-                auto node = make_shared<ParseNode>(prod.first);
-
-                // si k>0 pop x k y
-                for (int i = 0; i < k; ++i)
-                {
-                    state_stack.pop();
-                    node->children.insert(node->children.begin(), parse_stack.top());
-                    parse_stack.pop();
-                }
-                // goto
-                int top = state_stack.top();
-                int ns = goto_table.at(top).at(prod.first);
-                state_stack.push(ns);
-                parse_stack.push(node);
-            }
-            else
-            { // acc
-                return parse_stack.top();
-            }
-        }
-    }
-};
-
-// ——————————————————————————————————————————————
-// 6. Impresión legible del árbol
-// ——————————————————————————————————————————————
-void print_tree(const shared_ptr<ParseNode> &n, int depth = 0)
+bool Parser::accept(TokenType tt)
 {
-    string indent(depth * 2, ' ');
-    string sym;
-    switch (n->type)
+    if (cur.type == tt)
     {
-    case E:
-        sym = "E";
-        break;
-    case T:
-        sym = "T";
-        break;
-    case F:
-        sym = "F";
-        break;
-    case PLUS:
-        sym = "+";
-        break;
-    case MINUS:
-        sym = "-";
-        break;
-    case STAR:
-        sym = "*";
-        break;
-    case SLASH:
-        sym = "/";
-        break;
-    case LPAREN:
-        sym = "(";
-        break;
-    case RPAREN:
-        sym = ")";
-        break;
-    case NUMBER:
-        sym = n->value;
-        break;
-    case END:
-        sym = "$";
-        break;
+        advance();
+        return true;
+    }
+    return false;
+}
+
+void Parser::expect(TokenType tt)
+{
+    if (cur.type != tt)
+        throw std::runtime_error("Parse error: se esperaba " + tokenName(tt));
+    advance();
+}
+
+// parseProgram ::= DefinitionList GlobalExpr
+std::unique_ptr<ProgramNode> Parser::parseProgram()
+{
+    auto defs = parseDefinitionList();
+    auto expr = parseGlobalExpr();
+    return std::make_unique<ProgramNode>(std::move(defs), std::move(expr));
+}
+
+// DefinitionList ::= Definition DefinitionList | ε
+std::vector<std::unique_ptr<DefinitionNode>> Parser::parseDefinitionList()
+{
+    std::vector<std::unique_ptr<DefinitionNode>> defs;
+    while (cur.type == TokenType::KW_function || cur.type == TokenType::KW_type || cur.type == TokenType::KW_protocol)
+    {
+        defs.push_back(parseDefinition());
+    }
+    return defs;
+}
+
+std::unique_ptr<DefinitionNode> Parser::parseDefinition()
+{
+    if (cur.type == TokenType::KW_function)
+        return parseFuncDef();
+    if (cur.type == TokenType::KW_type)
+        return parseTypeDef();
+    // protocol
+    return parseProtoDef();
+}
+
+// FuncDef ::= "function" id "(" ParamList? ")" ReturnType? "=>" SimpleExpr ";"
+//           | "function" id "(" ParamList? ")" ReturnType? "{" ExprList "}" ";"
+std::unique_ptr<FuncDefNode> Parser::parseFuncDef()
+{
+    expect(TokenType::KW_function);
+    std::string name = cur.text;
+    expect(TokenType::IDENT);
+    expect(TokenType::LPAREN);
+    auto params = (cur.type != TokenType::RPAREN) ? parseParamList() : std::vector<std::unique_ptr<ParamNode>>{};
+    expect(TokenType::RPAREN);
+    std::unique_ptr<TypeNode> retType = nullptr;
+    if (accept(TokenType::COLON))
+        retType = parseType();
+
+    std::unique_ptr<ExprNode> body;
+    if (accept(TokenType::ARROW))
+    {
+        body = parseExpr();
+        expect(TokenType::SEMICOLON);
+    }
+    else
+    {
+        expect(TokenType::LBRACE);
+        auto stmts = parseExprList();
+        expect(TokenType::RBRACE);
+        expect(TokenType::SEMICOLON);
+        body = std::make_unique<BlockNode>(std::move(stmts));
+    }
+    return std::make_unique<FuncDefNode>(name, std::move(params), std::move(retType), std::move(body));
+}
+
+// TypeDef ::= "type" id TypeParams? ("inherits" id "(" ArgList? ")")? "{" MemberList "}"
+std::unique_ptr<TypeDefNode> Parser::parseTypeDef()
+{
+    expect(TokenType::KW_type);
+    std::string name = cur.text;
+    expect(TokenType::IDENT);
+    // (opcional) params genéricos...
+    if (accept(TokenType::LPAREN))
+    {
+        // parseTypeParams();
+        while (!accept(TokenType::RPAREN))
+            advance();
+    }
+    // herencia opcional...
+    if (accept(TokenType::KW_inherits))
+    {
+        std::string base = cur.text;
+        expect(TokenType::IDENT);
+        expect(TokenType::LPAREN);
+        // ArgList opcional
+        if (cur.type != TokenType::RPAREN)
+            parseArgList();
+        expect(TokenType::RPAREN);
+    }
+    expect(TokenType::LBRACE);
+    auto members = parseMemberList();
+    expect(TokenType::RBRACE);
+    return std::make_unique<TypeDefNode>(name, std::move(members));
+}
+
+// ProtoDef ::= "protocol" id ("extends" id)? "{" ProtoMember* "}"
+std::unique_ptr<ProtoDefNode> Parser::parseProtoDef()
+{
+    expect(TokenType::KW_protocol);
+    std::string name = cur.text;
+    expect(TokenType::IDENT);
+    if (accept(TokenType::KW_extends))
+    {
+        std::string parent = cur.text;
+        expect(TokenType::IDENT);
+    }
+    expect(TokenType::LBRACE);
+    std::vector<std::unique_ptr<ProtoMemberNode>> members;
+    while (cur.type == TokenType::IDENT)
+    {
+        members.push_back(parseProtoMember());
+    }
+    expect(TokenType::RBRACE);
+    return std::make_unique<ProtoDefNode>(name, std::move(members));
+}
+
+// GlobalExpr ::= Expr [";"]
+std::unique_ptr<ExprNode> Parser::parseGlobalExpr()
+{
+    auto e = parseExpr();
+    accept(TokenType::SEMICOLON);
+    return e;
+}
+
+// parseExpr y resto de funciones siguen la misma mecánica:
+//   - comprobar qué token actual nos lleva a cuál producción
+//   - invocar al parseXxx() correspondiente
+//   - combinar nodos AST con std::make_unique<...>(...)
+
+std::unique_ptr<ExprNode> Parser::parseExpr()
+{
+    // empieza en LetInStmt | IfExpr | WhileExpr | ForExpr | DestructiveAssign | OrExpr
+    if (cur.type == TokenType::KW_let)
+        return parseLetInStmt();
+    if (cur.type == TokenType::KW_if)
+        return parseIfExpr();
+    if (cur.type == TokenType::KW_while)
+        return parseWhileExpr();
+    if (cur.type == TokenType::KW_for)
+        return parseForExpr();
+    if (cur.type == TokenType::IDENT && lexer.peek().type == TokenType::COLON_EQ)
+        return parseDestructiveAssign();
+    return parseOrExpr();
+}
+
+// … implementación de parseLetInStmt, parseIfExpr, parseWhileExpr, parseForExpr,
+// parseDestructiveAssign, y después los métodos de precedencia:
+// parseOrExpr → parseAndExpr → parseEqExpr → … → parsePowExpr → parsePrimary
+
+// parsePrimary() maneja literales, identificadores, llamadas, new, bloques, paréntesis…
+std::unique_ptr<ExprNode> Parser::parsePrimary()
+{
+    switch (cur.type)
+    {
+    case TokenType::NUMBER:
+        return parseLiteral();
+    case TokenType::STRING:
+        return parseLiteral();
+    case TokenType::KW_true:
+    case TokenType::KW_false:
+        return parseLiteral();
+    case TokenType::IDENT:
+        return parseFuncCallOrVar();
+    case TokenType::KW_new:
+        return parseNewType();
+    case TokenType::LBRACE:
+        return parseExprBlock();
+    case TokenType::LPAREN:
+    {
+        advance();
+        auto e = parseExpr();
+        expect(TokenType::RPAREN);
+        return e;
+    }
     default:
-        sym = "?";
-        break;
+        throw std::runtime_error("Primary expected");
     }
-    cout << indent << sym << "\n";
-    for (auto &ch : n->children)
-        print_tree(ch, depth + 1);
 }
 
-// ——————————————————————————————————————————————
-// 7. Ejemplo de uso
-// ——————————————————————————————————————————————
-int main()
-{
-    cout << "Ingrese una expresión: ";
-    string line;
-    getline(cin, line);
-
-    try
-    {
-        LRParser parser(line);
-        auto tree = parser.parse();
-        cout << "\nÁrbol de análisis:\n";
-        print_tree(tree);
-    }
-    catch (const exception &e)
-    {
-        cerr << "Error: " << e.what() << "\n";
-        return 1;
-    }
-    return 0;
-}
+// …etcétera para el resto de nodos…

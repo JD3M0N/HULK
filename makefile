@@ -8,7 +8,7 @@ ifeq ($(OS),Windows_NT)
   OBJ_FILES := src\main.o \
                src\lexer\HULKLexer.o \
                src\parser\HULKParser.o \
-               src\AST\AST.o
+               src\AST\ast.o
   OUT_BIN   := build\script.hulk.exe
 else
   UNAME_S   := $(shell uname -s)
@@ -19,7 +19,7 @@ else
   OBJ_FILES := src/main.o \
                src/lexer/HULKLexer.o \
                src/parser/HULKParser.o \
-               src/AST/AST.o
+               src/AST/ast.o
   OUT_BIN   := build/script.hulk
 endif
 
@@ -45,7 +45,7 @@ src/parser/HULKParser.o: src/parser/HULKParser.cpp src/parser/HULKParser.h \
                         src/lexer/HULKLexer.h token/Token.h src/AST/AST.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-src/AST/AST.o: src/AST/AST.cpp src/AST/AST.h
+src/AST/AST.o: src/AST/ast.cpp src/AST/ast.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Clean up

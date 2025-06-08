@@ -66,3 +66,5 @@ clean:
 # Limpiar todo completamente (incluye la carpeta de binarios)
 distclean: clean
 	rm -rf $(BIN_DIR)
+
+# xD

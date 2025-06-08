@@ -1,75 +1,70 @@
-# Detect OS and set platform‐specific commands and paths
-ifeq ($(OS),Windows_NT)
-  UNAME_S   := Windows
-  DIRSEP    := \\
-  RM        := del /Q
-  RMDIR     := rmdir /S /Q
-  MKDIR     := mkdir build 2>nul
-  OBJ_FILES := src\main.o \
-               src\lexer.o \
-               src\SintacticoBison.tab.o \
-               src\lexer\HULKLexer.o \
-               src\parser\HULKParser.o
-  OUT_BIN   := build\script.hulk.exe
-else
-  UNAME_S   := $(shell uname -s)
-  DIRSEP    := /
-  RM        := rm -f
-  RMDIR     := rm -rf
-  MKDIR     := mkdir -p build
-  OBJ_FILES := src/main.o \
-               src/lexer.o \
-               src/SintacticoBison.tab.o \
-               src/lexer/HULKLexer.o \
-               src/parser/HULKParser.o
-  OUT_BIN   := build/script.hulk
-endif
+# Compilador a utilizar
+CXX = g++
 
-CXX      := g++
-CXXFLAGS := -std=c++17 -g -O0 -Wall -Isrc
-LDFLAGS  := -lm
+# Flags de compilación: -std=c++17 para compatibilidad moderna, -Wall para mostrar advertencias
+CXXFLAGS = -std=c++17 -Wall -I src
 
-# Default
+# Archivo fuente del lexer (Flex)
+LEXER_SRC = src/Lexer/lexer.l
+
+# Archivo fuente del parser
+PARSER_SRC = src/Parser/parser.y
+
+# Archivo generado por Flex (lo compilaremos)
+LEXER_GEN = src/Lexer/lex.yy.cpp
+
+# Archivo generado por Bison
+PARSER_GEN_CPP = src/Parser/parser.tab.cpp
+PARSER_GEN_HPP = src/Parser/parser.tab.hpp
+
+# Archivo fuente principal
+MAIN_SRC = src/main.cpp
+
+# Objetos resultantes de la compilación
+OBJS = $(PARSER_GEN_CPP:.cpp=.o) $(LEXER_GEN:.cpp=.o)  $(MAIN_SRC:.cpp=.o)
+
+# Carpeta donde se generará el ejecutable
+BIN_DIR = hulk
+
+# Nombre del ejecutable final
+EXECUTABLE = $(BIN_DIR)/hulk_executable
+
+# Target principal (default)
 all: compile
 
-# Build: ensure build/ exists, then link
-compile: $(OBJ_FILES)
-	@$(MKDIR)
-	$(CXX) $(CXXFLAGS) -o $(OUT_BIN) $(OBJ_FILES) $(LDFLAGS)
+# Compilación completa
+compile: $(EXECUTABLE)
 
-# Generate Flex and Bison files
-src/lexer.cpp: src/lexer.lpp
-	flex -o $@ $<
+# Primero generar parser con Bison (genera .cpp y .hpp)
+$(PARSER_GEN_CPP) $(PARSER_GEN_HPP): $(PARSER_SRC)
+	bison -d -o $(PARSER_GEN_CPP) $(PARSER_SRC)
 
-src/SintacticoBison.tab.cpp src/SintacticoBison.tab.hpp: src/SintacticoBison.ypp
-	bison -d -o src/SintacticoBison.tab.cpp $<
+# Luego generar lexer con Flex (después de tener parser.tab.hpp)
+$(LEXER_GEN): $(LEXER_SRC) $(PARSER_GEN_HPP)
+	flex -o $(LEXER_GEN) $(LEXER_SRC)
 
-# Compile each .cpp into its .o
-src/main.o: src/main.cpp src/lexer/HULKLexer.h src/parser/HULKParser.h src/token/Token.h
+# Compilación de cualquier archivo .cpp en su .o correspondiente
+%.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-src/lexer.o: src/lexer.cpp src/SintacticoBison.tab.hpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+# Compila el ejecutable a partir de los objetos
+$(EXECUTABLE): $(PARSER_GEN_CPP) $(LEXER_GEN) $(OBJS) | $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $(OBJS) -o $@
 
-src/SintacticoBison.tab.o: src/SintacticoBison.tab.cpp src/SintacticoBison.tab.hpp src/tree.hpp src/error_handler.hpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+# Crear carpeta 'hulk' si no existe
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
 
-src/lexer/HULKLexer.o: src/lexer/HULKLexer.cpp src/lexer/HULKLexer.h src/token/Token.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+# Ejecutar el programa, pasando script.hulk como argumento
+execute: compile
+	./$(EXECUTABLE) script.hulk
 
-src/parser/HULKParser.o: src/parser/HULKParser.cpp src/parser/HULKParser.h src/lexer/HULKLexer.h src/token/Token.h src/tree.hpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Clean up
+# Limpiar todos los archivos generados
 clean:
-ifeq ($(UNAME_S),Windows)
-	@echo Cleaning for Windows...
-	@$(RM) $(OBJ_FILES) $(OUT_BIN) src\lexer.cpp src\SintacticoBison.tab.cpp src\SintacticoBison.tab.hpp 2>nul
-	@$(RMDIR) build 2>nul
-else
-	@echo Cleaning for Unix...
-	@$(RM) $(OBJ_FILES) $(OUT_BIN) src/lexer.cpp src/SintacticoBison.tab.cpp src/SintacticoBison.tab.hpp
-	@$(RMDIR) build
-endif
+	rm -f $(OBJS) $(LEXER_GEN)  $(PARSER_GEN_CPP) $(PARSER_GEN_HPP) $(EXECUTABLE)
 
-.PHONY: all compile clean
+# Limpiar todo completamente (incluye la carpeta de binarios)
+distclean: clean
+	rm -rf $(BIN_DIR)
+
+# xD

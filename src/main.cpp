@@ -5,6 +5,8 @@
 #include "Evaluator/evaluator.hpp"
 #include "PrintVisitor/print_visitor.hpp"
 #include "Value/value.hpp"
+#include "Errors/error_handler.hpp"
+#include "Errors/error_reporter.hpp"
 
 extern FILE *yyin;
 extern int yyparse();
@@ -13,6 +15,19 @@ extern Program *rootAST;
 
 int main(int argc, char *argv[])
 {
+    // Configura el manejador de errores
+    ErrorReporter reporter(std::cerr, true); // Usa colores
+
+    // Inicializa el sistema con una función de callback para reportar errores
+    ErrorManager::initialize(
+        false, // No abortar automáticamente en errores
+        ErrorLevel::INFO, // Reportar desde nivel INFO
+        [&reporter](const Error &error)
+        {
+            reporter.report(error);
+        }
+    );
+
     if (argc < 2)
     {
         std::cerr << "Uso: " << argv[0] << " <archivo.hulk>" << std::endl;
@@ -53,5 +68,9 @@ int main(int argc, char *argv[])
     //     stmt->accept(&evaluator);
 
     fclose(file);
+
+    // Limpia el sistema de errores al finalizar
+    ErrorManager::destroy();
+
     return 0;
 }

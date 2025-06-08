@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "../Errors/location.hpp"
 
 struct Program;
 struct NumberExpr;
@@ -55,8 +56,17 @@ struct StmtVisitor
 // Base class for all expression nodes
 struct Expr
 {
+    Location location;
+
+    // Constructor que recibe ubicación
+    Expr(const Location &loc = Location()) : location(loc) {}
+
     virtual void accept(ExprVisitor *v) = 0;
     virtual ~Expr() = default;
+
+    int getLine() const { return location.line; }
+    int getColumn() const { return location.column; }
+    const Location &getLocation() const { return location; }
 };
 
 using ExprPtr = std::unique_ptr<Expr>;

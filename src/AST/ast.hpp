@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include "../Errors/location.hpp"
+#include "../SemanticAnalysis/context.hpp" 
 
 struct Program;
 struct NumberExpr;
@@ -62,6 +63,10 @@ struct Expr
     Expr(const Location &loc = Location()) : location(loc) {}
 
     virtual void accept(ExprVisitor *v) = 0;
+    
+    // Método virtual para validación semántica
+    virtual bool validate(std::shared_ptr<IContext> context) = 0;
+    
     virtual ~Expr() = default;
 
     int getLine() const { return location.line; }
@@ -75,6 +80,10 @@ using ExprPtr = std::unique_ptr<Expr>;
 struct Stmt
 {
     virtual void accept(StmtVisitor *) = 0;
+    
+    // Método virtual para validación semántica de statements
+    virtual bool validate(std::shared_ptr<IContext> context) = 0;
+    
     virtual ~Stmt() = default;
 };
 
@@ -84,10 +93,21 @@ using StmtPtr = std::unique_ptr<Stmt>;
 struct Program : Stmt
 {
     std::vector<StmtPtr> stmts;
-    void
-    accept(StmtVisitor *v) override
+    
+    void accept(StmtVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Validar todo el programa
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        for (auto &stmt : stmts) {
+            if (!stmt->validate(context)) {
+                return false;
+            }
+        }
+        return true;
     }
 };
 
@@ -96,10 +116,16 @@ struct ExprStmt : Stmt
 {
     ExprPtr expr;
     ExprStmt(ExprPtr e) : expr(std::move(e)) {}
-    void
-    accept(StmtVisitor *v) override
+    
+    void accept(StmtVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Validar la expresión contenida
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        return expr->validate(context);
     }
 };
 
@@ -108,10 +134,16 @@ struct NumberExpr : Expr
 {
     double value;
     NumberExpr(double v) : value(v) {}
-    void
-    accept(ExprVisitor *v) override
+    
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Los literales numéricos siempre son válidos
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        return true;
     }
 };
 
@@ -120,10 +152,16 @@ struct StringExpr : Expr
 {
     std::string value;
     StringExpr(const std::string &s) : value(s) {}
-    void
-    accept(ExprVisitor *v) override
+    
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Los literales de string siempre son válidos
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        return true;
     }
 };
 
@@ -132,10 +170,16 @@ struct BooleanExpr : Expr
 {
     bool value;
     BooleanExpr(bool v) : value(v) {}
-    void
-    accept(ExprVisitor *v) override
+    
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Los literales booleanos siempre son válidos
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        return true;
     }
 };
 
@@ -148,10 +192,16 @@ struct UnaryExpr : Expr
     } op;
     ExprPtr operand;
     UnaryExpr(Op o, ExprPtr expr) : op(o), operand(std::move(expr)) {}
-    void
-    accept(ExprVisitor *v) override
+    
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Validar el operando
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        return operand->validate(context);
     }
 };
 
@@ -179,10 +229,16 @@ struct BinaryExpr : Expr
     ExprPtr left;
     ExprPtr right;
     BinaryExpr(Op o, ExprPtr l, ExprPtr r) : op(o), left(std::move(l)), right(std::move(r)) {}
-    void
-    accept(ExprVisitor *v) override
+    
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Validar ambos operandos
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        return left->validate(context) && right->validate(context);
     }
 };
 
@@ -195,10 +251,27 @@ struct CallExpr : Expr
         : callee(name), args(std::move(arguments))
     {
     }
-    void
-    accept(ExprVisitor *v) override
+    
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Validar que la función existe con la aridad correcta y que todos los argumentos sean válidos
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        // Verificar que la función esté definida con la cantidad correcta de argumentos
+        if (!context->isDefined(callee, static_cast<int>(args.size()))) {
+            return false;
+        }
+        
+        // Validar todos los argumentos
+        for (auto &arg : args) {
+            if (!arg->validate(context)) {
+                return false;
+            }
+        }
+        return true;
     }
 };
 
@@ -207,10 +280,16 @@ struct VariableExpr : Expr
 {
     std::string name;
     VariableExpr(const std::string &n) : name(n) {}
-    void
-    accept(ExprVisitor *v) override
+    
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Validar que la variable esté definida
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        return context->isDefined(name);
     }
 };
 
@@ -224,10 +303,30 @@ struct LetExpr : Expr
         : name(n), initializer(std::move(init)), body(std::move(b))
     {
     }
-    void
-    accept(ExprVisitor *v) override
+    
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Validar let: primero el inicializador, luego definir la variable y validar el cuerpo
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        // Primero validar el inicializador en el contexto actual
+        if (!initializer->validate(context)) {
+            return false;
+        }
+        
+        // Crear un contexto hijo para el cuerpo donde la variable está definida
+        auto innerContext = context->createChildContext();
+        
+        // Definir la variable en el contexto hijo
+        if (!innerContext->define(name)) {
+            return false; // Error si ya existe en este contexto
+        }
+        
+        // Validar el cuerpo en el contexto donde la variable está disponible
+        return body->validate(innerContext);
     }
 };
 
@@ -239,10 +338,21 @@ struct AssignExpr : Expr
 
     AssignExpr(const std::string &n, ExprPtr v) : name(n), value(std::move(v)) {}
 
-    void
-    accept(ExprVisitor *v) override
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Validar asignación: la variable debe existir y el valor debe ser válido
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        // La variable debe estar previamente definida para poder asignarle
+        if (!context->isDefined(name)) {
+            return false;
+        }
+        
+        // El valor a asignar debe ser válido
+        return value->validate(context);
     }
 };
 
@@ -258,10 +368,35 @@ struct FunctionDecl : Stmt
     {
     }
 
-    void
-    accept(StmtVisitor *v) override
+    void accept(StmtVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Validar declaración de función (siguiendo el patrón del texto)
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        // Crear un contexto hijo para el cuerpo de la función
+        auto innerContext = context->createChildContext();
+        
+        // Definir todos los parámetros en el contexto hijo
+        for (const auto &param : params) {
+            if (!innerContext->define(param)) {
+                return false; // Error si hay parámetros duplicados
+            }
+        }
+        
+        // Validar el cuerpo en el contexto con los parámetros definidos
+        if (!body->validate(innerContext)) {
+            return false;
+        }
+        
+        // Finalmente, definir la función en el contexto actual
+        if (!context->define(name, params)) {
+            return false; // Error si la función ya existe con la misma aridad
+        }
+        
+        return true;
     }
 };
 
@@ -277,10 +412,28 @@ struct IfExpr : Expr
     {
     }
 
-    void
-    accept(ExprVisitor *v) override
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Validar if-else: condición y ambas ramas deben ser válidas
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        if (!condition->validate(context)) {
+            return false;
+        }
+        
+        if (!thenBranch->validate(context)) {
+            return false;
+        }
+        
+        // elseBranch puede ser nullptr en algunos casos
+        if (elseBranch && !elseBranch->validate(context)) {
+            return false;
+        }
+        
+        return true;
     }
 };
 
@@ -289,14 +442,28 @@ struct ExprBlock : Expr
 {
     std::vector<StmtPtr> stmts;
     ExprBlock(std::vector<StmtPtr> &&s) : stmts(std::move(s)) {}
-    void
-    accept(ExprVisitor *v) override
+    
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
     }
+    
+    // Validar bloque: todos los statements deben ser válidos
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        // Crear un contexto hijo para el bloque
+        auto blockContext = context->createChildContext();
+        
+        for (auto &stmt : stmts) {
+            if (!stmt->validate(blockContext)) {
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
-// patra ciclos while
+// para ciclos while
 struct WhileExpr : Expr
 {
     ExprPtr condition;
@@ -304,10 +471,19 @@ struct WhileExpr : Expr
 
     WhileExpr(ExprPtr cond, ExprPtr b) : condition(std::move(cond)), body(std::move(b)) {}
 
-    void
-    accept(ExprVisitor *v) override
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
+    }
+    
+    // Validar while: condición y cuerpo deben ser válidos
+    bool validate(std::shared_ptr<IContext> context) override
+    {
+        if (!condition->validate(context)) {
+            return false;
+        }
+        
+        return body->validate(context);
     }
 };
 

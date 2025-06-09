@@ -75,6 +75,36 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         e->expr->accept(this);
     }
 
+    // *** NUEVOS MÉTODOS PARA CLASES - IMPLEMENTACIÓN BÁSICA ***
+    void visit(ClassDef *cls) override
+    {
+        // Por ahora, solo reportamos que encontramos una clase
+        std::cout << "[INFO] Definición de clase encontrada: " << cls->name;
+        if (!cls->parent.empty()) {
+            std::cout << " (hereda de " << cls->parent << ")";
+        }
+        std::cout << std::endl;
+        
+        // TODO: Implementar sistema de tipos completo
+        // Esto será parte del verificador de tipos que implementaremos después
+    }
+
+    void visit(AttrDef *attr) override
+    {
+        std::cout << "[INFO] Definición de atributo: " << attr->name << " : " << attr->type << std::endl;
+        
+        // TODO: Implementar gestión de atributos
+        // Por ahora solo reportamos que encontramos el atributo
+    }
+
+    void visit(MethodDef *method) override
+    {
+        std::cout << "[INFO] Definición de método: " << method->name << std::endl;
+        
+        // TODO: Implementar gestión de métodos
+        // Por ahora solo reportamos que encontramos el método
+    }
+
     // ExprVisitor:
     void
     visit(NumberExpr *e) override
@@ -353,7 +383,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             // Guardar entorno actual
             auto oldEnv = env;
             auto oldVariables = variables;
-            
+
             // Crear nuevo contexto hijo
             env = std::dynamic_pointer_cast<Context>(env->createChildContext());
 
@@ -806,6 +836,51 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             result = lastValue;
         }
         lastValue = result;
+    }
+
+    // *** NUEVOS MÉTODOS PARA EXPRESIONES ORIENTADAS A OBJETOS - IMPLEMENTACIÓN BÁSICA ***
+    void visit(NewExpr *expr) override
+    {
+        std::cout << "[INFO] Intento de crear instancia de clase: " << expr->className << std::endl;
+        
+        // TODO: Implementar creación real de objetos
+        // Por ahora reportamos que se encontró la expresión
+        lastValue = Value(0.0); // Valor temporal
+    }
+
+    void visit(AttributeAccessExpr *expr) override
+    {
+        std::cout << "[INFO] Acceso a atributo: " << expr->attribute << std::endl;
+        
+        // TODO: Implementar acceso real a atributos
+        // Por ahora reportamos que se encontró la expresión
+        expr->object->accept(this); // Evaluar el objeto
+        lastValue = Value(0.0); // Valor temporal
+    }
+
+    void visit(MethodCallExpr *expr) override
+    {
+        std::cout << "[INFO] Llamada a método: " << expr->method << std::endl;
+        
+        // TODO: Implementar llamadas reales a métodos
+        // Por ahora reportamos que se encontró la expresión
+        expr->object->accept(this); // Evaluar el objeto
+        
+        // Evaluar argumentos
+        for (auto &arg : expr->args) {
+            arg->accept(this);
+        }
+        
+        lastValue = Value(0.0); // Valor temporal
+    }
+
+    void visit(SelfExpr *expr) override
+    {
+        std::cout << "[INFO] Referencia a 'self'" << std::endl;
+        
+        // TODO: Implementar referencia real a self
+        // Por ahora reportamos que se encontró la expresión
+        lastValue = Value(0.0); // Valor temporal
     }
 };
 

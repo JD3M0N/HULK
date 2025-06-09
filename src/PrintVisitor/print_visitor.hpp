@@ -37,6 +37,75 @@ struct PrintVisitor : StmtVisitor, ExprVisitor
         indentLevel--;
     }
 
+    // *** NUEVOS MÉTODOS PARA CLASES ***
+    void visit(ClassDef *cls) override
+    {
+        printIndent();
+        std::cout << "|_ClassDef: " << cls->name;
+        if (!cls->parent.empty()) {
+            std::cout << " inherits " << cls->parent;
+        }
+        std::cout << "\n";
+        indentLevel++;
+        
+        if (!cls->attributes.empty()) {
+            printIndent();
+            std::cout << "|_Attributes:\n";
+            indentLevel++;
+            for (auto &attr : cls->attributes) {
+                attr->accept(this);
+            }
+            indentLevel--;
+        }
+        
+        if (!cls->methods.empty()) {
+            printIndent();
+            std::cout << "|_Methods:\n";
+            indentLevel++;
+            for (auto &method : cls->methods) {
+                method->accept(this);
+            }
+            indentLevel--;
+        }
+        
+        indentLevel--;
+    }
+
+    void visit(AttrDef *attr) override
+    {
+        printIndent();
+        std::cout << "|_AttrDef: " << attr->name << " : " << attr->type;
+        if (attr->initialization) {
+            std::cout << " = ";
+            std::cout << "\n";
+            indentLevel++;
+            attr->initialization->accept(this);
+            indentLevel--;
+        } else {
+            std::cout << "\n";
+        }
+    }
+
+    void visit(MethodDef *method) override
+    {
+        printIndent();
+        std::cout << "|_MethodDef: " << method->name << "(";
+        for (size_t i = 0; i < method->argNames.size(); ++i) {
+            if (i > 0) std::cout << ", ";
+            std::cout << method->argNames[i] << " : " << method->argTypes[i];
+        }
+        std::cout << ") : " << method->returnType << "\n";
+        indentLevel++;
+        
+        printIndent();
+        std::cout << "|_Body:\n";
+        indentLevel++;
+        method->body->accept(this);
+        indentLevel--;
+        
+        indentLevel--;
+    }
+
     // ExprVisitor
     void
     visit(NumberExpr *expr) override
@@ -208,6 +277,62 @@ struct PrintVisitor : StmtVisitor, ExprVisitor
         indentLevel--;
 
         indentLevel--;
+    }
+
+    // *** NUEVOS MÉTODOS PARA EXPRESIONES ORIENTADAS A OBJETOS ***
+    void visit(NewExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ NewExpr: " << expr->className << "\n";
+        indentLevel++;
+        for (const auto &arg : expr->args) {
+            arg->accept(this);
+        }
+        indentLevel--;
+    }
+
+    void visit(AttributeAccessExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ AttributeAccess: ." << expr->attribute << "\n";
+        indentLevel++;
+        printIndent();
+        std::cout << "|_ Object:\n";
+        indentLevel++;
+        expr->object->accept(this);
+        indentLevel--;
+        indentLevel--;
+    }
+
+    void visit(MethodCallExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ MethodCall: ." << expr->method << "\n";
+        indentLevel++;
+        
+        printIndent();
+        std::cout << "|_ Object:\n";
+        indentLevel++;
+        expr->object->accept(this);
+        indentLevel--;
+        
+        if (!expr->args.empty()) {
+            printIndent();
+            std::cout << "|_ Arguments:\n";
+            indentLevel++;
+            for (const auto &arg : expr->args) {
+                arg->accept(this);
+            }
+            indentLevel--;
+        }
+        
+        indentLevel--;
+    }
+
+    void visit(SelfExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ SelfExpr\n";
     }
 
 private:

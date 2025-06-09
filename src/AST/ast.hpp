@@ -30,6 +30,15 @@ struct IfExpr;
 struct ExprBlock;
 struct WhileExpr;
 
+// *** NUEVAS FORWARD DECLARATIONS PARA CLASES ***
+struct ClassDef;
+struct AttrDef;
+struct MethodDef;
+struct NewExpr;
+struct AttributeAccessExpr;
+struct MethodCallExpr;
+struct SelfExpr;
+
 // Forward declaration para SemanticValidator 
 class SemanticValidator;
 
@@ -48,6 +57,13 @@ struct ExprVisitor
     virtual void visit(IfExpr *) = 0;
     virtual void visit(ExprBlock *) = 0;
     virtual void visit(WhileExpr *) = 0;
+    
+    // *** NUEVOS MÉTODOS PARA EXPRESIONES ORIENTADAS A OBJETOS ***
+    virtual void visit(NewExpr *expr) = 0;
+    virtual void visit(AttributeAccessExpr *expr) = 0;
+    virtual void visit(MethodCallExpr *expr) = 0;
+    virtual void visit(SelfExpr *expr) = 0;
+    
     virtual ~ExprVisitor() = default;
 };
 
@@ -56,6 +72,12 @@ struct StmtVisitor
     virtual void visit(Program *) = 0;
     virtual void visit(ExprStmt *) = 0;
     virtual void visit(FunctionDecl *) = 0;
+    
+    // *** NUEVOS MÉTODOS PARA DECLARACIONES ORIENTADAS A OBJETOS ***
+    virtual void visit(ClassDef *) = 0;
+    virtual void visit(AttrDef *) = 0;
+    virtual void visit(MethodDef *) = 0;
+    
     virtual ~StmtVisitor() = default;
 };
 
@@ -695,5 +717,7 @@ inline bool WhileExpr::validate(std::shared_ptr<IContext> context, SemanticValid
     
     return bodyValid;
 }
+
+#include "class_nodes.hpp"
 
 #endif // AST_HPP

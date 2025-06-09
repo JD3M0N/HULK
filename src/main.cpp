@@ -5,6 +5,8 @@
 #include "Evaluator/evaluator.hpp"
 #include "PrintVisitor/print_visitor.hpp"
 #include "Value/value.hpp"
+#include "Scope/scope.hpp"
+#include "Scope/name_resolver.hpp"
 
 extern FILE *yyin;
 extern int yyparse();
@@ -28,29 +30,37 @@ int main(int argc, char *argv[])
 
     yylineno = 1;
     yyin = file;
-    // extern int yydebug;
-    // yydebug = 1;
 
     if (yyparse() != 0 || rootAST == nullptr)
     {
         std::cerr << "Error al parsear.\n";
+        fclose(file);
         return 1;
     }
 
-    // 1) Pretty-print del AST completo
+    // 1) Análisis semántico: resolución de nombres usando Scope
+    try
+    {
+        NameResolver resolver;
+        rootAST->accept(&resolver);
+        std::cout << "=== Análisis semántico OK ===\n";
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "Error semántico: " << e.what() << "\n";
+        fclose(file);
+        return 2;
+    }
+
+    // 2) Pretty-print del AST completo
     std::cout << "=== AST ===\n";
     PrintVisitor printer;
     rootAST->accept(&printer);
 
-    // 2)(sentencia a sentencia)
+    // 3) Ejecución
     std::cout << "\n=== Ejecución ===\n";
     EvaluatorVisitor evaluator;
-    // Puedes ejecutar todo de una vez:
     rootAST->accept(&evaluator);
-
-    //  línea a línea:
-    // for (auto &stmt : rootAST->stmts)
-    //     stmt->accept(&evaluator);
 
     fclose(file);
     return 0;

@@ -21,7 +21,7 @@
 #include "../Value/enumerable.hpp"
 #include "../Value/iterable.hpp"
 #include "../Value/value.hpp"
-#include "env_frame.hpp"
+#include "../SemanticAnalysis/context.hpp" 
 #include "../Errors/error_handler.hpp"
 #include "../Errors/error_types/type_error.hpp"
 #include "../Errors/error_types/name_error.hpp"
@@ -31,15 +31,17 @@
 struct EvaluatorVisitor : StmtVisitor, ExprVisitor
 {
     Value lastValue{0.0};
-    // En vez de un mapa plano, un puntero a EnvFrame
-    std::shared_ptr<EnvFrame> env;
+    // Usar sistema de contextos en lugar de EnvFrame
+    std::shared_ptr<Context> env;
+    // Mapa para almacenar valores de variables por contexto
+    std::unordered_map<std::string, Value> variables;
 
     std::unordered_map<std::string, FunctionDecl *> functions;
 
     EvaluatorVisitor()
     {
-        // Inicializar con un frame “global” sin padre
-        env = std::make_shared<EnvFrame>(nullptr);
+        // Inicializar con un contexto "global" sin padre
+        env = std::make_shared<Context>(nullptr);
     }
 
     // Programa: recorre stmt a stmt
@@ -350,19 +352,24 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
 
             // Guardar entorno actual
             auto oldEnv = env;
-            env = std::make_shared<EnvFrame>(oldEnv);
+            auto oldVariables = variables;
+            
+            // Crear nuevo contexto hijo
+            env = std::dynamic_pointer_cast<Context>(env->createChildContext());
 
-            // Asignar parámetros
+            // Asignar parámetros como variables en el nuevo contexto
             for (size_t i = 0; i < f->params.size(); ++i)
             {
-                env->locals[f->params[i]] = args[i];
+                env->define(f->params[i]);
+                variables[f->params[i]] = args[i];
             }
 
             // Evaluar cuerpo
             f->body->accept(this);
 
             // Restaurar entorno
-            env = std::move(oldEnv);
+            env = oldEnv;
+            variables = oldVariables;
 
             return;
         }
@@ -633,11 +640,39 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         }
     }
 
+    // Helper function to get variable value
+    Value getVariable(const std::string& name)
+    {
+        if (variables.find(name) != variables.end())
+        {
+            return variables[name];
+        }
+        
+        // Si no está en el mapa actual, buscar en variables built-in
+        if (name == "PI") return Value(M_PI);
+        if (name == "E") return Value(M_E);
+        
+        throw std::runtime_error("Variable no encontrada: " + name);
+    }
+
+    // Helper function to set variable value
+    void setVariable(const std::string& name, const Value& value)
+    {
+        if (env->isDefined(name))
+        {
+            variables[name] = value;
+        }
+        else
+        {
+            throw std::runtime_error("Variable no definida: " + name);
+        }
+    }
+
     // for variable declarations
     void
     visit(VariableExpr *expr) override
     {
-        if (!env->existsInChain(expr->name))
+        if (!env->isDefined(expr->name))
         {
             ErrorManager::getInstance().report<NameError>(
                 "Variable no definida: '" + expr->name + "'",
@@ -646,8 +681,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             return;
         }
         
-        // get() buscará en este frame y en los padres
-        lastValue = env->get(expr->name);
+        lastValue = getVariable(expr->name);
     }
 
     // let in expressions
@@ -658,21 +692,25 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         expr->initializer->accept(this);
         Value initVal = lastValue;
 
-        // 2) Abrir un nuevo frame (scope hijo)
-        auto oldEnv = env; // guardar el frame padre
-        env = std::make_shared<EnvFrame>(oldEnv);
+        // 2) Guardar estado anterior
+        auto oldEnv = env;
+        auto oldVariables = variables;
 
-        // 3) Insertar la variable en el mapa local
-        env->locals[expr->name] = initVal;
+        // 3) Crear nuevo contexto hijo
+        env = std::dynamic_pointer_cast<Context>(env->createChildContext());
 
-        // 4) Evaluar el cuerpo (es un Stmt)
+        // 4) Definir e insertar la variable
+        env->define(expr->name);
+        variables[expr->name] = initVal;
+
+        // 5) Evaluar el cuerpo
         expr->body->accept(static_cast<StmtVisitor *>(this));
         Value result = lastValue;
 
-        // 5) Al salir, restaurar el frame anterior
-        env = std::move(oldEnv);
+        // 6) Restaurar estado anterior
+        env = oldEnv;
+        variables = oldVariables;
 
-        // 6) El valor resultante de la expresión let es el valor devuelto
         lastValue = result;
     }
 
@@ -684,8 +722,8 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         expr->value->accept(this);
         Value newVal = lastValue;
 
-        // Verificar que exista en alguna parte (no crear nuevas automáticamente):
-        if (!env->existsInChain(expr->name))
+        // Verificar que exista en alguna parte:
+        if (!env->isDefined(expr->name))
         {
             ErrorManager::getInstance().report<NameError>(
                 "No se puede asignar a variable no declarada: '" + expr->name + "'",
@@ -693,8 +731,8 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             );
             return;
         }
-        // Llamamos a set() para que reasigne en el frame correspondiente:
-        env->set(expr->name, newVal);
+        
+        setVariable(expr->name, newVal);
         lastValue = newVal;
     }
 
@@ -734,20 +772,22 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
     void
     visit(ExprBlock *b) override
     {
-        // 1) Abrir un nuevo frame (scope hijo) antes de entrar al bloque
+        // 1) Guardar estado anterior
         auto oldEnv = env;
-        env = std::make_shared<EnvFrame>(oldEnv);
+        auto oldVariables = variables;
 
-        // 2) Evaluar cada sentencia dentro del bloque con este nuevo frame
+        // 2) Crear nuevo contexto hijo
+        env = std::dynamic_pointer_cast<Context>(env->createChildContext());
+
+        // 3) Evaluar cada sentencia dentro del bloque
         for (auto &stmt : b->stmts)
         {
             stmt->accept(this);
         }
 
-        // 3) Restaurar el frame anterior al salir del bloque
-        env = std::move(oldEnv);
-
-        // lastValue queda con el valor del último statement ejecutado
+        // 4) Restaurar estado anterior
+        env = oldEnv;
+        variables = oldVariables;
     }
 
     void

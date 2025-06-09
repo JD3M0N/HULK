@@ -65,34 +65,21 @@ int main(int argc, char *argv[])
     IntegratedSemanticValidator validator;
     
     bool isSemanticValid = validator.validateProgram(rootAST);
-    
-    if (!isSemanticValid) {
-        std::cout << "Errores semánticos encontrados:\n";
-        for (const auto& error : validator.getErrors()) {
-            std::cout << "  " << error->getFullMessage() << "\n";
-        }
-        
-        fclose(file);
-        ErrorManager::destroy();
-        return 1; // Salir si hay errores semánticos
-    }
-    
-    std::cout << "Validación semántica exitosa.\n";
 
-    // 3) Ejecucion (solo si no hay errores semánticos)
+    if (!isSemanticValid) {
+        reporter.reportAll(validator.getErrors());  // Usar colores
+    } else {
+        std::cout << "Validación semántica exitosa.\n";
+    }
+
+    // 3) Ejecución (siempre ejecutar para ver errores de runtime también)
     std::cout << "\n=== Ejecución ===\n";
     EvaluatorVisitor evaluator;
-    // Puedes ejecutar todo de una vez:
     rootAST->accept(&evaluator);
 
-    //  línea a línea:
-    // for (auto &stmt : rootAST->stmts)
-    //     stmt->accept(&evaluator);
-
     fclose(file);
-
-    // Limpia el sistema de errores al finalizar
     ErrorManager::destroy();
 
-    return 0;
+    // Retornar error solo si hubo errores semánticos
+    return isSemanticValid ? 0 : 1;
 }

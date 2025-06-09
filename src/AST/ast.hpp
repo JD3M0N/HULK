@@ -393,10 +393,11 @@ inline bool Program::validate(std::shared_ptr<IContext> context, SemanticValidat
     }
     
     bool result = true;
+    // NO hacer break en el primer error - continuar validando todo
     for (auto &stmt : stmts) {
         if (!stmt->validate(context, validator)) {
             result = false;
-            break;
+            // Continúa validando el resto de statements en lugar de hacer break
         }
     }
     
@@ -440,13 +441,14 @@ inline bool BinaryExpr::validate(std::shared_ptr<IContext> context, SemanticVali
         validator->logContextEnter("BinaryExpr");
     }
     
-    bool result = left->validate(context, validator) && right->validate(context, validator);
+    bool leftValid = left->validate(context, validator);
+    bool rightValid = right->validate(context, validator);
     
     if (validator) {
         validator->logContextExit("BinaryExpr");
     }
     
-    return result;
+    return leftValid && rightValid;
 }
 
 inline bool CallExpr::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
@@ -461,20 +463,17 @@ inline bool CallExpr::validate(std::shared_ptr<IContext> context, SemanticValida
         validator->logFunctionCheck(callee, static_cast<int>(args.size()), functionExists);
     }
     
-    if (!functionExists) {
-        if (validator) {
-            validator->logContextExit("CallExpr: " + callee);
-        }
-        return false;
+    // AGREGAR ESTE BLOQUE: Si la función no está definida, añadir el error
+    if (!functionExists && validator) {
+        validator->addError("Funcion no definida: " + callee + " con " + 
+                           std::to_string(args.size()) + " argumentos", Location());
     }
     
     // Validar todos los argumentos
+    bool allArgsValid = true;
     for (auto &arg : args) {
         if (!arg->validate(context, validator)) {
-            if (validator) {
-                validator->logContextExit("CallExpr: " + callee);
-            }
-            return false;
+            allArgsValid = false;
         }
     }
     
@@ -482,7 +481,7 @@ inline bool CallExpr::validate(std::shared_ptr<IContext> context, SemanticValida
         validator->logContextExit("CallExpr: " + callee);
     }
     
-    return true;
+    return functionExists && allArgsValid;
 }
 
 inline bool VariableExpr::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
@@ -490,6 +489,10 @@ inline bool VariableExpr::validate(std::shared_ptr<IContext> context, SemanticVa
     
     if (validator) {
         validator->logVariableCheck(name, isDefined);
+    }
+    
+    if (!isDefined && validator) {
+        validator->addError("Variable no definida: " + name, Location());
     }
     
     return isDefined;

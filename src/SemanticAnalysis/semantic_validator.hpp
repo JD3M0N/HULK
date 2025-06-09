@@ -6,21 +6,12 @@
 #include <string>
 #include <unordered_set>
 #include <iostream>
+#include <iomanip>
 #include "../AST/ast.hpp"
 #include "../Errors/error.hpp"
 #include "../Errors/error_types/syntax_error.hpp"
+#include "../Errors/error_types/semantic_error.hpp"
 #include "context.hpp"
-
-// Error específico para problemas semánticos
-class SemanticError : public Error {
-public:
-    SemanticError(const std::string& msg, const Location& loc = Location())
-        : Error(msg, loc, ErrorLevel::ERROR) {}
-    
-    std::string getErrorName() const override { 
-        return "Error Semantico"; 
-    }
-};
 
 // Validador semántico principal con logging detallado
 class SemanticValidator {
@@ -29,12 +20,14 @@ private:
     std::vector<std::shared_ptr<Error>> errors;
     bool verboseMode;
     int indentLevel;
+    std::vector<std::string> contextStack; // Pila de contextos para mostrar jerarquía
     
 public:
     SemanticValidator(bool verbose = true) : verboseMode(verbose), indentLevel(0) {
         // Crear el contexto global
         globalContext = std::make_shared<Context>();
         setupBuiltins();
+        contextStack.push_back("Global");
     }
     
     // Validar un programa completo
@@ -48,22 +41,19 @@ public:
         errors.clear();
         
         if (verboseMode) {
-            std::cout << "[SEMANTIC] Iniciando validacion semantica...\n";
-            std::cout << "[BUILTIN ] Contexto global configurado con funciones built-in\n";
+            printHeader("VALIDACION SEMANTICA");
+            printSeparator();
+            std::cout << "Iniciando validacion del programa...\n";
             printBuiltins();
-            std::cout << "\n";
+            printSeparator();
         }
         
         // Validar el programa usando el contexto global Y pasando la referencia del validador
         bool isValid = program->validate(globalContext, this);
         
         if (verboseMode) {
-            std::cout << "\n[RESUMEN ] Resumen de validacion:\n";
-            if (!errors.empty()) {
-                std::cout << "[ERROR  ] " << errors.size() << " error(es) encontrado(s)\n";
-            } else {
-                std::cout << "[SUCCESS] Sin errores semanticos\n";
-            }
+            printSeparator();
+            printSummary();
         }
         
         return isValid && errors.empty();
@@ -77,13 +67,27 @@ public:
     // Agregar un error a la lista
     void addError(const std::string& message, const Location& location) {
         if (verboseMode) {
-            std::cout << "[ERROR  ] " << message;
+            printIndent();
+            std::cout << "[ERROR] " << message;
             if (location.line > 0) {
-                std::cout << " (linea " << location.line << ")";
+                std::cout << " (linea " << location.line;
+                if (location.column > 0) {
+                    std::cout << ", col " << location.column;
+                }
+                std::cout << ")";
             }
+            std::cout << " | Contexto: " << getCurrentContextPath();
             std::cout << "\n";
         }
-        errors.push_back(std::make_shared<SemanticError>(message, location));
+        
+        auto error = std::make_shared<SemanticError>(message, location);
+        errors.push_back(error);
+        
+        // Debug: Mostrar que el error fue añadido
+        if (verboseMode) {
+            printIndent();
+            std::cout << "    [DEBUG] Error agregado. Total errores: " << errors.size() << "\n";
+        }
     }
     
     // Obtener el contexto global (útil para testing)
@@ -96,15 +100,20 @@ public:
         if (!verboseMode) return;
         
         printIndent();
-        if (isDefined) {
-            std::cout << "[VAR-OK ] Variable '" << varName << "' encontrada";
-        } else {
-            std::cout << "[VAR-ERR] Variable '" << varName << "' NO definida";
-        }
+        std::cout << (isDefined ? "[VAR-OK]" : "[VAR-ER]");
+        std::cout << " Variable '" << varName << "'";
+        std::cout << (isDefined ? " encontrada" : " NO definida");
+        
         if (!context.empty()) {
             std::cout << " en " << context;
         }
+        
+        std::cout << " | Contexto actual: " << getCurrentContextPath();
         std::cout << "\n";
+        
+        if (!isDefined) {
+            printAvailableVariables();
+        }
     }
     
     // Logging para validación de funciones
@@ -112,15 +121,20 @@ public:
         if (!verboseMode) return;
         
         printIndent();
-        if (isDefined) {
-            std::cout << "[FUNC-OK] Funcion '" << funcName << "(" << arity << " args)' encontrada";
-        } else {
-            std::cout << "[FUNC-ER] Funcion '" << funcName << "(" << arity << " args)' NO definida";
-        }
+        std::cout << (isDefined ? "[FUNC-OK]" : "[FUNC-ER]");
+        std::cout << " Funcion '" << funcName << "(" << arity << " args)'";
+        std::cout << (isDefined ? " encontrada" : " NO definida");
+        
         if (!context.empty()) {
             std::cout << " en " << context;
         }
+        
+        std::cout << " | Contexto: " << getCurrentContextPath();
         std::cout << "\n";
+        
+        if (!isDefined) {
+            printAvailableFunctions(arity);
+        }
     }
     
     // Logging para definición de variables
@@ -128,14 +142,15 @@ public:
         if (!verboseMode) return;
         
         printIndent();
-        if (success) {
-            std::cout << "[VAR-DEF] Variable '" << varName << "' definida";
-        } else {
-            std::cout << "[VAR-DUP] Variable '" << varName << "' ya existe";
-        }
+        std::cout << (success ? "[VAR-DEF]" : "[VAR-DUP]");
+        std::cout << " Variable '" << varName << "'";
+        std::cout << (success ? " definida" : " ya existe");
+        
         if (!context.empty()) {
             std::cout << " en " << context;
         }
+        
+        std::cout << " | Contexto: " << getCurrentContextPath();
         std::cout << "\n";
     }
     
@@ -144,15 +159,25 @@ public:
         if (!verboseMode) return;
         
         printIndent();
-        if (success) {
-            std::cout << "[FUN-DEF] Funcion '" << funcName << "(";
+        std::cout << (success ? "[FUN-DEF]" : "[FUN-DUP]");
+        std::cout << " Funcion '" << funcName << "(";
+        for (size_t i = 0; i < params.size(); ++i) {
+            if (i > 0) std::cout << ", ";
+            std::cout << params[i];
+        }
+        std::cout << ")'";
+        std::cout << (success ? " definida" : " ya existe");
+        std::cout << " | Contexto: " << getCurrentContextPath();
+        std::cout << "\n";
+        
+        if (success && !params.empty()) {
+            printIndent();
+            std::cout << "    Parametros: ";
             for (size_t i = 0; i < params.size(); ++i) {
                 if (i > 0) std::cout << ", ";
                 std::cout << params[i];
             }
-            std::cout << ")' definida\n";
-        } else {
-            std::cout << "[FUN-DUP] Funcion '" << funcName << "' con " << params.size() << " parametros ya existe\n";
+            std::cout << "\n";
         }
     }
     
@@ -161,16 +186,26 @@ public:
         if (!verboseMode) return;
         
         printIndent();
-        std::cout << "[CONTEXT] Entrando a " << contextType << "\n";
+        std::cout << "[ENTER] " << contextType;
+        std::cout << " | Ruta: " << getCurrentContextPath() << " -> " << contextType;
+        std::cout << "\n";
+        
+        contextStack.push_back(contextType);
         indentLevel++;
     }
     
     void logContextExit(const std::string& contextType) {
         if (!verboseMode) return;
         
+        if (!contextStack.empty() && contextStack.back() == contextType) {
+            contextStack.pop_back();
+        }
+        
         indentLevel--;
         printIndent();
-        std::cout << "[CONTEXT] Saliendo de " << contextType << "\n";
+        std::cout << "[EXIT ] " << contextType;
+        std::cout << " | Volviendo a: " << getCurrentContextPath();
+        std::cout << "\n";
     }
     
     // Activar/desactivar modo verbose
@@ -185,16 +220,97 @@ private:
         }
     }
     
+    void printHeader(const std::string& title) {
+        std::cout << "\n";
+        printSeparator();
+        std::cout << "  " << title << "\n";
+        printSeparator();
+    }
+    
+    void printSeparator() {
+        std::cout << std::string(60, '=') << "\n";
+    }
+    
+    void printSubSeparator() {
+        std::cout << std::string(40, '-') << "\n";
+    }
+    
+    std::string getCurrentContextPath() {
+        if (contextStack.empty()) return "Global";
+        
+        std::string path = "";
+        for (size_t i = 0; i < contextStack.size(); ++i) {
+            if (i > 0) path += " > ";
+            path += contextStack[i];
+        }
+        return path;
+    }
+    
+    void printAvailableVariables() {
+        // Esta función necesitaría acceso al contexto actual para mostrar variables disponibles
+        // Por ahora, solo mostramos un mensaje indicativo
+        printIndent();
+        std::cout << "    Sugerencia: Verificar variables disponibles en contexto actual\n";
+    }
+    
+    void printAvailableFunctions(int expectedArity) {
+        printIndent();
+        std::cout << "    Funciones disponibles con " << expectedArity << " parametros:\n";
+        
+        // Mostrar algunas funciones built-in relevantes
+        if (expectedArity == 1) {
+            printIndent();
+            std::cout << "      sqrt, sin, cos, exp, log, abs, print, toString, toNumber\n";
+        } else if (expectedArity == 2) {
+            printIndent();
+            std::cout << "      range, pow, mod\n";
+        } else if (expectedArity == 0) {
+            printIndent();
+            std::cout << "      rand\n";
+        }
+    }
+    
     void printBuiltins() {
         if (!verboseMode) return;
         
-        std::cout << "[BUILTIN] Funciones built-in disponibles:\n";
-        std::cout << "[BUILTIN]   - Matematicas: sqrt(x), sin(x), cos(x), exp(x), log(x), abs(x)\n";
-        std::cout << "[BUILTIN]   - Sin parametros: rand()\n";
-        std::cout << "[BUILTIN]   - E/S: print(value)\n";
-        std::cout << "[BUILTIN]   - Iteradores: range(min,max), next(iter), current(iter), iter(range)\n";
-        std::cout << "[BUILTIN]   - Conversion: toString(value), toNumber(value)\n";
-        std::cout << "[BUILTIN]   - Operadores: pow(base,exp), mod(dividend,divisor)\n";
+        std::cout << "[SETUP] Configurando funciones built-in:\n";
+        printSubSeparator();
+        std::cout << "  Matematicas (1 arg): sqrt, sin, cos, exp, log, abs\n";
+        std::cout << "  Sin parametros:      rand\n";
+        std::cout << "  Entrada/Salida:      print\n";
+        std::cout << "  Iteradores:          range(min,max), next(iter), current(iter), iter(range)\n";
+        std::cout << "  Conversion:          toString, toNumber\n";
+        std::cout << "  Operadores:          pow(base,exp), mod(dividend,divisor)\n";
+    }
+    
+    void printSummary() {
+        std::cout << "RESUMEN DE VALIDACION:\n";
+        printSubSeparator();
+        std::cout << "Total de errores encontrados: " << errors.size() << "\n";
+        
+        if (errors.empty()) {
+            std::cout << "[SUCCESS] Validacion semantica exitosa - Sin errores encontrados\n";
+        } else {
+            std::cout << "[FAILED ] " << errors.size() << " error(es) semantico(s) encontrado(s):\n\n";
+            
+            for (size_t i = 0; i < errors.size(); ++i) {
+                std::cout << "  " << (i + 1) << ". ";
+                
+                // Usar getMessage() directamente ya que getErrorName() puede no existir
+                std::cout << errors[i]->getMessage();
+                
+                if (errors[i]->getLocation().line > 0) {
+                    std::cout << " (linea " << errors[i]->getLocation().line;
+                    if (errors[i]->getLocation().column > 0) {
+                        std::cout << ", col " << errors[i]->getLocation().column;
+                    }
+                    std::cout << ")";
+                }
+                std::cout << "\n";
+            }
+        }
+        
+        printSeparator();
     }
     
     // Configurar funciones built-in del lenguaje

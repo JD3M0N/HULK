@@ -7,6 +7,7 @@
 #include "Value/value.hpp"
 #include "Errors/error_handler.hpp"
 #include "Errors/error_reporter.hpp"
+#include "SemanticAnalysis/semantic_validator.hpp"
 
 extern FILE *yyin;
 extern int yyparse();
@@ -49,6 +50,8 @@ int main(int argc, char *argv[])
     if (yyparse() != 0 || rootAST == nullptr)
     {
         std::cerr << "Error al parsear.\n";
+        fclose(file);
+        ErrorManager::destroy();
         return 1;
     }
 
@@ -57,7 +60,26 @@ int main(int argc, char *argv[])
     PrintVisitor printer;
     rootAST->accept(&printer);
 
-    // 2)(sentencia a sentencia)
+    // 2) VALIDACIÓN SEMÁNTICA (NUEVO)
+    std::cout << "\n=== Validación Semántica ===\n";
+    IntegratedSemanticValidator validator;
+    
+    bool isSemanticValid = validator.validateProgram(rootAST);
+    
+    if (!isSemanticValid) {
+        std::cout << "Errores semánticos encontrados:\n";
+        for (const auto& error : validator.getErrors()) {
+            std::cout << "  " << error->getFullMessage() << "\n";
+        }
+        
+        fclose(file);
+        ErrorManager::destroy();
+        return 1; // Salir si hay errores semánticos
+    }
+    
+    std::cout << "Validación semántica exitosa.\n";
+
+    // 3) Ejecucion (solo si no hay errores semánticos)
     std::cout << "\n=== Ejecución ===\n";
     EvaluatorVisitor evaluator;
     // Puedes ejecutar todo de una vez:

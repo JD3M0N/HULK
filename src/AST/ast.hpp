@@ -9,7 +9,9 @@
 #include <string>
 #include <vector>
 #include "../Errors/location.hpp"
-#include "../SemanticAnalysis/context.hpp" 
+
+// Forward declarations básicas
+class IContext;
 
 struct Program;
 struct NumberExpr;
@@ -27,6 +29,9 @@ struct FunctionDecl;
 struct IfExpr;
 struct ExprBlock;
 struct WhileExpr;
+
+// Forward declaration para SemanticValidator 
+class SemanticValidator;
 
 struct ExprVisitor
 {
@@ -64,8 +69,8 @@ struct Expr
 
     virtual void accept(ExprVisitor *v) = 0;
     
-    // Método virtual para validación semántica
-    virtual bool validate(std::shared_ptr<IContext> context) = 0;
+    // Método virtual para validación semántica con logging
+    virtual bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) = 0;
     
     virtual ~Expr() = default;
 
@@ -81,13 +86,19 @@ struct Stmt
 {
     virtual void accept(StmtVisitor *) = 0;
     
-    // Método virtual para validación semántica de statements
-    virtual bool validate(std::shared_ptr<IContext> context) = 0;
+    // Método virtual para validación semántica de statements con logging
+    virtual bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) = 0;
     
     virtual ~Stmt() = default;
 };
 
 using StmtPtr = std::unique_ptr<Stmt>;
+
+// Incluir las definiciones completas DESPUÉS de las declaraciones forward
+#include "../SemanticAnalysis/context.hpp"
+
+// Forward declaration de SemanticValidator para evitar dependencia circular
+// Las implementaciones de validate se harán inline después de incluir semantic_validator.hpp
 
 // program: father of all the statements
 struct Program : Stmt
@@ -99,16 +110,8 @@ struct Program : Stmt
         v->visit(this);
     }
     
-    // Validar todo el programa
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        for (auto &stmt : stmts) {
-            if (!stmt->validate(context)) {
-                return false;
-            }
-        }
-        return true;
-    }
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
 };
 
 // evaluates an expression
@@ -122,11 +125,8 @@ struct ExprStmt : Stmt
         v->visit(this);
     }
     
-    // Validar la expresión contenida
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        return expr->validate(context);
-    }
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
 };
 
 // Literal: numeric
@@ -141,8 +141,9 @@ struct NumberExpr : Expr
     }
     
     // Los literales numéricos siempre son válidos
-    bool validate(std::shared_ptr<IContext> context) override
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override
     {
+        // Los literales no necesitan logging especial, siempre son válidos
         return true;
     }
 };
@@ -159,7 +160,7 @@ struct StringExpr : Expr
     }
     
     // Los literales de string siempre son válidos
-    bool validate(std::shared_ptr<IContext> context) override
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override
     {
         return true;
     }
@@ -177,7 +178,7 @@ struct BooleanExpr : Expr
     }
     
     // Los literales booleanos siempre son válidos
-    bool validate(std::shared_ptr<IContext> context) override
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override
     {
         return true;
     }
@@ -198,11 +199,8 @@ struct UnaryExpr : Expr
         v->visit(this);
     }
     
-    // Validar el operando
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        return operand->validate(context);
-    }
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
 };
 
 // Binary operation: +, -, *, /, ^, comparisons, mod
@@ -235,11 +233,8 @@ struct BinaryExpr : Expr
         v->visit(this);
     }
     
-    // Validar ambos operandos
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        return left->validate(context) && right->validate(context);
-    }
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
 };
 
 // Function call: sqrt, sin, cos, exp, log, rand
@@ -257,22 +252,8 @@ struct CallExpr : Expr
         v->visit(this);
     }
     
-    // Validar que la función existe con la aridad correcta y que todos los argumentos sean válidos
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        // Verificar que la función esté definida con la cantidad correcta de argumentos
-        if (!context->isDefined(callee, static_cast<int>(args.size()))) {
-            return false;
-        }
-        
-        // Validar todos los argumentos
-        for (auto &arg : args) {
-            if (!arg->validate(context)) {
-                return false;
-            }
-        }
-        return true;
-    }
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
 };
 
 // **VariableExpr**: para referirse a un identificador
@@ -286,11 +267,8 @@ struct VariableExpr : Expr
         v->visit(this);
     }
     
-    // Validar que la variable esté definida
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        return context->isDefined(name);
-    }
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
 };
 
 // **LetExpr**: let <name> = <init> in <body>
@@ -309,25 +287,8 @@ struct LetExpr : Expr
         v->visit(this);
     }
     
-    // Validar let: primero el inicializador, luego definir la variable y validar el cuerpo
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        // Primero validar el inicializador en el contexto actual
-        if (!initializer->validate(context)) {
-            return false;
-        }
-        
-        // Crear un contexto hijo para el cuerpo donde la variable está definida
-        auto innerContext = context->createChildContext();
-        
-        // Definir la variable en el contexto hijo
-        if (!innerContext->define(name)) {
-            return false; // Error si ya existe en este contexto
-        }
-        
-        // Validar el cuerpo en el contexto donde la variable está disponible
-        return body->validate(innerContext);
-    }
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
 };
 
 // a := b  destructive assignment
@@ -343,17 +304,8 @@ struct AssignExpr : Expr
         v->visit(this);
     }
     
-    // Validar asignación: la variable debe existir y el valor debe ser válido
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        // La variable debe estar previamente definida para poder asignarle
-        if (!context->isDefined(name)) {
-            return false;
-        }
-        
-        // El valor a asignar debe ser válido
-        return value->validate(context);
-    }
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
 };
 
 // for function's declaration
@@ -373,31 +325,8 @@ struct FunctionDecl : Stmt
         v->visit(this);
     }
     
-    // Validar declaración de función (siguiendo el patrón del texto)
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        // Crear un contexto hijo para el cuerpo de la función
-        auto innerContext = context->createChildContext();
-        
-        // Definir todos los parámetros en el contexto hijo
-        for (const auto &param : params) {
-            if (!innerContext->define(param)) {
-                return false; // Error si hay parámetros duplicados
-            }
-        }
-        
-        // Validar el cuerpo en el contexto con los parámetros definidos
-        if (!body->validate(innerContext)) {
-            return false;
-        }
-        
-        // Finalmente, definir la función en el contexto actual
-        if (!context->define(name, params)) {
-            return false; // Error si la función ya existe con la misma aridad
-        }
-        
-        return true;
-    }
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
 };
 
 // if-else expressions:
@@ -417,24 +346,8 @@ struct IfExpr : Expr
         v->visit(this);
     }
     
-    // Validar if-else: condición y ambas ramas deben ser válidas
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        if (!condition->validate(context)) {
-            return false;
-        }
-        
-        if (!thenBranch->validate(context)) {
-            return false;
-        }
-        
-        // elseBranch puede ser nullptr en algunos casos
-        if (elseBranch && !elseBranch->validate(context)) {
-            return false;
-        }
-        
-        return true;
-    }
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
 };
 
 // bloques de expresiones
@@ -448,19 +361,8 @@ struct ExprBlock : Expr
         v->visit(this);
     }
     
-    // Validar bloque: todos los statements deben ser válidos
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        // Crear un contexto hijo para el bloque
-        auto blockContext = context->createChildContext();
-        
-        for (auto &stmt : stmts) {
-            if (!stmt->validate(blockContext)) {
-                return false;
-            }
-        }
-        return true;
-    }
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
 };
 
 // para ciclos while
@@ -476,15 +378,319 @@ struct WhileExpr : Expr
         v->visit(this);
     }
     
-    // Validar while: condición y cuerpo deben ser válidos
-    bool validate(std::shared_ptr<IContext> context) override
-    {
-        if (!condition->validate(context)) {
+    // Declaración solamente - implementación al final del archivo
+    bool validate(std::shared_ptr<IContext> context, SemanticValidator* validator = nullptr) override;
+};
+
+// Incluir el validador semántico DESPUÉS de todas las declaraciones
+#include "../SemanticAnalysis/semantic_validator.hpp"
+
+// IMPLEMENTACIONES INLINE de los métodos validate que usan SemanticValidator
+
+inline bool Program::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    if (validator) {
+        validator->logContextEnter("Programa");
+    }
+    
+    bool result = true;
+    for (auto &stmt : stmts) {
+        if (!stmt->validate(context, validator)) {
+            result = false;
+            break;
+        }
+    }
+    
+    if (validator) {
+        validator->logContextExit("Programa");
+    }
+    
+    return result;
+}
+
+inline bool ExprStmt::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    if (validator) {
+        validator->logContextEnter("ExprStmt");
+    }
+    
+    bool result = expr->validate(context, validator);
+    
+    if (validator) {
+        validator->logContextExit("ExprStmt");
+    }
+    
+    return result;
+}
+
+inline bool UnaryExpr::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    if (validator) {
+        validator->logContextEnter("UnaryExpr");
+    }
+    
+    bool result = operand->validate(context, validator);
+    
+    if (validator) {
+        validator->logContextExit("UnaryExpr");
+    }
+    
+    return result;
+}
+
+inline bool BinaryExpr::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    if (validator) {
+        validator->logContextEnter("BinaryExpr");
+    }
+    
+    bool result = left->validate(context, validator) && right->validate(context, validator);
+    
+    if (validator) {
+        validator->logContextExit("BinaryExpr");
+    }
+    
+    return result;
+}
+
+inline bool CallExpr::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    if (validator) {
+        validator->logContextEnter("CallExpr: " + callee);
+    }
+    
+    // Verificar que la función esté definida con la cantidad correcta de argumentos
+    bool functionExists = context->isDefined(callee, static_cast<int>(args.size()));
+    
+    if (validator) {
+        validator->logFunctionCheck(callee, static_cast<int>(args.size()), functionExists);
+    }
+    
+    if (!functionExists) {
+        if (validator) {
+            validator->logContextExit("CallExpr: " + callee);
+        }
+        return false;
+    }
+    
+    // Validar todos los argumentos
+    for (auto &arg : args) {
+        if (!arg->validate(context, validator)) {
+            if (validator) {
+                validator->logContextExit("CallExpr: " + callee);
+            }
             return false;
         }
-        
-        return body->validate(context);
     }
-};
+    
+    if (validator) {
+        validator->logContextExit("CallExpr: " + callee);
+    }
+    
+    return true;
+}
+
+inline bool VariableExpr::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    bool isDefined = context->isDefined(name);
+    
+    if (validator) {
+        validator->logVariableCheck(name, isDefined);
+    }
+    
+    return isDefined;
+}
+
+inline bool LetExpr::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    if (validator) {
+        validator->logContextEnter("LetExpr: " + name);
+    }
+    
+    // Primero validar el inicializador en el contexto actual
+    if (!initializer->validate(context, validator)) {
+        if (validator) {
+            validator->logContextExit("LetExpr: " + name);
+        }
+        return false;
+    }
+    
+    // Crear un contexto hijo para el cuerpo donde la variable está definida
+    auto innerContext = context->createChildContext();
+    
+    // Definir la variable en el contexto hijo
+    bool defined = innerContext->define(name);
+    if (validator) {
+        validator->logVariableDefinition(name, defined, "LetExpr");
+    }
+    
+    if (!defined) {
+        if (validator) {
+            validator->logContextExit("LetExpr: " + name);
+        }
+        return false; // Error si ya existe en este contexto
+    }
+    
+    // Validar el cuerpo en el contexto donde la variable está disponible
+    bool bodyValid = body->validate(innerContext, validator);
+    
+    if (validator) {
+        validator->logContextExit("LetExpr: " + name);
+    }
+    
+    return bodyValid;
+}
+
+inline bool AssignExpr::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    if (validator) {
+        validator->logContextEnter("AssignExpr: " + name);
+    }
+    
+    // La variable debe estar previamente definida para poder asignarle
+    bool isDefined = context->isDefined(name);
+    if (validator) {
+        validator->logVariableCheck(name, isDefined, "AssignExpr");
+    }
+    
+    if (!isDefined) {
+        if (validator) {
+            validator->logContextExit("AssignExpr: " + name);
+        }
+        return false;
+    }
+    
+    // El valor a asignar debe ser válido
+    bool valueValid = value->validate(context, validator);
+    
+    if (validator) {
+        validator->logContextExit("AssignExpr: " + name);
+    }
+    
+    return valueValid;
+}
+
+inline bool FunctionDecl::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    if (validator) {
+        validator->logContextEnter("FunctionDecl: " + name);
+    }
+    
+    // *** CAMBIO PRINCIPAL: Definir la función PRIMERO para permitir recursión ***
+    bool functionDefined = context->define(name, params);
+    if (validator) {
+        validator->logFunctionDefinition(name, params, functionDefined);
+    }
+    
+    if (!functionDefined) {
+        if (validator) {
+            validator->logContextExit("FunctionDecl: " + name);
+        }
+        return false; // Error si la función ya existe con la misma aridad
+    }
+    
+    // Crear un contexto hijo para el cuerpo de la función
+    auto innerContext = context->createChildContext();
+    
+    // Definir todos los parámetros en el contexto hijo
+    for (const auto &param : params) {
+        bool paramDefined = innerContext->define(param);
+        if (validator) {
+            validator->logVariableDefinition(param, paramDefined, "Parametro de " + name);
+        }
+        
+        if (!paramDefined) {
+            if (validator) {
+                validator->logContextExit("FunctionDecl: " + name);
+            }
+            return false; // Error si hay parámetros duplicados
+        }
+    }
+    
+    // Validar el cuerpo en el contexto con los parámetros definidos
+    // AHORA la función ya está definida en el contexto padre, permitiendo recursión
+    if (!body->validate(innerContext, validator)) {
+        if (validator) {
+            validator->logContextExit("FunctionDecl: " + name);
+        }
+        return false;
+    }
+    
+    if (validator) {
+        validator->logContextExit("FunctionDecl: " + name);
+    }
+    
+    return true;
+}
+
+inline bool IfExpr::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    if (validator) {
+        validator->logContextEnter("IfExpr");
+    }
+    
+    if (!condition->validate(context, validator)) {
+        if (validator) {
+            validator->logContextExit("IfExpr");
+        }
+        return false;
+    }
+    
+    if (!thenBranch->validate(context, validator)) {
+        if (validator) {
+            validator->logContextExit("IfExpr");
+        }
+        return false;
+    }
+    
+    // elseBranch puede ser nullptr en algunos casos
+    if (elseBranch && !elseBranch->validate(context, validator)) {
+        if (validator) {
+            validator->logContextExit("IfExpr");
+        }
+        return false;
+    }
+    
+    if (validator) {
+        validator->logContextExit("IfExpr");
+    }
+    
+    return true;
+}
+
+inline bool ExprBlock::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    if (validator) {
+        validator->logContextEnter("ExprBlock");
+    }
+    
+    // Crear un contexto hijo para el bloque
+    auto blockContext = context->createChildContext();
+    
+    for (auto &stmt : stmts) {
+        if (!stmt->validate(blockContext, validator)) {
+            if (validator) {
+                validator->logContextExit("ExprBlock");
+            }
+            return false;
+        }
+    }
+    
+    if (validator) {
+        validator->logContextExit("ExprBlock");
+    }
+    
+    return true;
+}
+
+inline bool WhileExpr::validate(std::shared_ptr<IContext> context, SemanticValidator* validator) {
+    if (validator) {
+        validator->logContextEnter("WhileExpr");
+    }
+    
+    if (!condition->validate(context, validator)) {
+        if (validator) {
+            validator->logContextExit("WhileExpr");
+        }
+        return false;
+    }
+    
+    bool bodyValid = body->validate(context, validator);
+    
+    if (validator) {
+        validator->logContextExit("WhileExpr");
+    }
+    
+    return bodyValid;
+}
 
 #endif // AST_HPP

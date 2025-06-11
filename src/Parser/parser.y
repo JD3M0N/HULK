@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <cmath>
+#include <cstring>
 #include "../AST/ast.hpp"
 #include "../PrintVisitor/print_visitor.hpp"
 #include "../Value/value.hpp"
@@ -16,8 +17,21 @@ extern int yylineno;
 void yyerror(const char* s);
 
 Program* rootAST = nullptr;
+
+
+struct ClassBody {
+  std::vector<std::pair<std::string, ExprPtr>> attributes;
+  std::vector<StmtPtr> methods;
+};
+
+
 %}
 
+%code requires
+{
+    struct ClassBody;   /* adelantos para parser.tab.hpp        */
+    struct MemberDef;   /* MemberDef ya está en ast.hpp         */
+}
 
 %union {
   char* str;
@@ -29,6 +43,8 @@ Program* rootAST = nullptr;
   std::vector<std::string>* str_list;
   std::pair<std::string, Expr*>* binding;
   std::vector<std::pair<std::string, Expr*>>* bindings;
+  ClassBody* class_body;
+  MemberDef* member_def;
 }
 
 %start input
@@ -43,6 +59,9 @@ Program* rootAST = nullptr;
 %type <bindings> binding_list 
 %type <expr> if_expr elif_list
 %type <expr_list> argument_list
+%type <str> opt_inherits
+%type <class_body> class_body
+%type <member_def> member_def
 
 
 %token LET IN 
@@ -55,6 +74,9 @@ Program* rootAST = nullptr;
 %token PLUS MINUS MULT DIV MOD POW CONCAT
 %token LE GE EQ NEQ LESS_THAN GREATER_THAN OR AND
 %token LPAREN RPAREN LBRACE RBRACE COMMA SEMICOLON
+%token TYPE INHERITS NEW SELF BASE
+%token DOT
+
 
 %left OR
 %left AND
@@ -126,8 +148,98 @@ stmt:
           $$ = new FunctionDecl(std::string($2), std::move(args), StmtPtr(new ExprStmt(ExprPtr($7))));
           free($2);
       }
+
+  | TYPE IDENT opt_inherits LBRACE class_body RBRACE {
+          ClassBody* cb = $5;
+          $$ = new ClassDecl(
+                   std::string($2),
+                   std::string($3),
+                   std::move(cb->attributes),
+                   std::move(cb->methods)
+               );
+          delete cb;     
+          free($2);
+          free($3);
+      }    
 ;    
 
+opt_inherits:
+      /* vacío */            { $$ = strdup("Object"); }
+    | INHERITS IDENT        { $$ = $2; }
+;
+
+class_body:
+      /* vacío */ {
+          $$ = new ClassBody();
+      }
+    | class_body member_def {
+          ClassBody* cb = $1;
+          if ($2->isAttribute) {
+              cb->attributes.push_back(std::move($2->attr));
+          } else {
+              cb->methods.push_back(std::move($2->method));
+          }
+          delete $2;
+          $$ = cb;
+    }
+;
+
+member_def:
+    /* atributo */ IDENT ASSIGN expr SEMICOLON {
+        $$ = new MemberDef{
+            true,
+            { std::string($1), ExprPtr($3) },      // <<< ExprPtr
+            nullptr
+        };
+        free($1);
+    }
+
+  | /* método full-form */
+    FUNCTION IDENT LPAREN ident_list RPAREN LBRACE stmt_list RBRACE {
+        /* posiciones
+            1: FUNCTION
+            2: IDENT
+            3: LPAREN
+            4: ident_list   <<< argumentos
+            5: RPAREN
+            6: LBRACE
+            7: stmt_list    <<< cuerpo
+            8: RBRACE
+        */
+        auto args = std::move(*$4); delete $4;     // <<< $4, no $5
+        auto block = std::make_unique<Program>();
+        block->stmts = std::move(*$7); delete $7;  // <<< $7, no $8
+
+        FunctionDecl* fn = new FunctionDecl(
+                               $2,
+                               std::move(args),
+                               std::move(block));
+        $$ = new MemberDef{ false, {}, StmtPtr(fn) };
+        free($2);
+    }
+
+  | /* método inline */
+    FUNCTION IDENT LPAREN ident_list RPAREN ARROW expr {
+        /* posiciones
+            1: FUNCTION
+            2: IDENT
+            3: LPAREN
+            4: ident_list   <<< argumentos
+            5: RPAREN
+            6: ARROW
+            7: expr         <<< cuerpo
+        */
+        auto args = std::move(*$4); delete $4;     // <<< $4, no $5
+        ExprStmt* body = new ExprStmt(ExprPtr($7));
+
+        FunctionDecl* fn = new FunctionDecl(
+                               $2,
+                               std::move(args),
+                               StmtPtr(body));
+        $$ = new MemberDef{ false, {}, StmtPtr(fn) };
+        free($2);
+    }
+;
 
 
 stmt_list:
@@ -292,6 +404,21 @@ expr:
         free($3);  // liberar el IDENT
         $$ = outerLetRaw;
     }
+
+    | NEW IDENT LPAREN argument_list RPAREN {
+        $$ = new NewExpr(std::string($2), std::move(*$4));
+        free($2); delete $4;
+    }
+    | SELF {
+        $$ = new SelfExpr();
+    }
+    | BASE {
+        $$ = new BaseExpr();
+    }
+    | expr DOT IDENT {
+        $$ = new MemberAccessExpr( ExprPtr($1), std::string($3) );
+        free($3);
+    }  
 
 ;
 

@@ -210,6 +210,72 @@ struct PrintVisitor : StmtVisitor, ExprVisitor
         indentLevel--;
     }
 
+    // === Soporte para clases y OO ===
+
+    // Declaración de clase
+    void visit(ClassDecl *c) override
+    {
+        printIndent();
+        std::cout << "|_ ClassDecl: " << c->name;
+        if (c->parent != "Object")
+            std::cout << " inherits " << c->parent;
+        std::cout << "\n";
+        indentLevel++;
+
+        // Atributos
+        for (auto &attr : c->attributes)
+        {
+            printIndent();
+            std::cout << "|_ Attribute: " << attr.first << "\n";
+            indentLevel++;
+            attr.second->accept(this);
+            indentLevel--;
+        }
+
+        // Métodos
+        for (auto &m : c->methods)
+        {
+            m->accept(this);
+        }
+
+        indentLevel--;
+    }
+
+    // new Tipo(arg1, arg2, …)
+    void visit(NewExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ NewExpr: " << expr->typeName << "\n";
+        indentLevel++;
+        for (auto &arg : expr->args)
+            arg->accept(this);
+        indentLevel--;
+    }
+
+    // self
+    void visit(SelfExpr * /*unused*/) override
+    {
+        printIndent();
+        std::cout << "|_ SelfExpr\n";
+    }
+
+    // base
+    void visit(BaseExpr * /*unused*/) override
+    {
+        printIndent();
+        std::cout << "|_ BaseExpr\n";
+    }
+
+    // objeto.miembro
+    void visit(MemberAccessExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ MemberAccess: " << expr->member << "\n";
+        indentLevel++;
+        expr->object->accept(this);
+        indentLevel--;
+    }    
+
 private:
     std::string
     opToString(BinaryExpr::Op op)

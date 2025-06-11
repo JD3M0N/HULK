@@ -49,6 +49,11 @@ extern int yylineno;
     if (strcmp(yytext, "true") == 0)     { yylval.expr = new BooleanExpr(true);  return TRUE; }
     if (strcmp(yytext, "false") == 0)    { yylval.expr = new BooleanExpr(false); return FALSE; }
     if (strcmp(yytext,"function") == 0)  return FUNCTION; 
+    if (strcmp(yytext, "type")     == 0) return TYPE;
+    if (strcmp(yytext, "inherits") == 0) return INHERITS;
+    if (strcmp(yytext, "new")      == 0) return NEW;
+    if (strcmp(yytext, "self")     == 0) { yylval.str = strdup("self"); return SELF; }
+    if (strcmp(yytext, "base")     == 0) { yylval.str = strdup("base"); return BASE; }    
 
 
     // Si no es ninguna palabra reservada, entonces es IDENT
@@ -56,7 +61,8 @@ extern int yylineno;
     return IDENT;
 }
 
-                    
+
+"\."                        { return DOT; }                    
 \,                          { return COMMA; }
 \+                          { return PLUS; }
 \-                          { return MINUS; }

@@ -25,6 +25,11 @@ struct FunctionDecl;
 struct IfExpr;
 struct ExprBlock;
 struct WhileExpr;
+struct NewExpr;
+struct BaseExpr;
+struct SelfExpr;
+struct MemberAccessExpr;
+struct ClassDecl;
 
 struct ExprVisitor
 {
@@ -41,6 +46,10 @@ struct ExprVisitor
     virtual void visit(IfExpr *) = 0;
     virtual void visit(ExprBlock *) = 0;
     virtual void visit(WhileExpr *) = 0;
+    virtual void visit(NewExpr *expr) = 0;
+    virtual void visit(SelfExpr *expr) = 0;
+    virtual void visit(BaseExpr *expr) = 0;
+    virtual void visit(MemberAccessExpr *expr) = 0;
     virtual ~ExprVisitor() = default;
 };
 
@@ -49,6 +58,7 @@ struct StmtVisitor
     virtual void visit(Program *) = 0;
     virtual void visit(ExprStmt *) = 0;
     virtual void visit(FunctionDecl *) = 0;
+    virtual void visit(ClassDecl *decl) = 0;
     virtual ~StmtVisitor() = default;
 };
 
@@ -300,5 +310,57 @@ struct WhileExpr : Expr
         v->visit(this);
     }
 };
+
+// Para distinguir atributos vs métodos en parser.y
+struct MemberDef { 
+    bool isAttribute;
+    std::pair<std::string, ExprPtr> attr;
+    StmtPtr method;
+};
+
+// Declaración de clase
+struct ClassDecl : Stmt {
+    std::string name;
+    std::string parent;
+    std::vector<std::pair<std::string, ExprPtr>> attributes;
+    std::vector<StmtPtr> methods;
+
+    ClassDecl(std::string n, std::string p,
+              std::vector<std::pair<std::string, ExprPtr>> attrs,
+              std::vector<StmtPtr> m)
+      : name(std::move(n)), parent(std::move(p)),
+        attributes(std::move(attrs)), methods(std::move(m)) {}
+
+    void accept(StmtVisitor* v) override { v->visit(this); }
+};
+
+// new Tipo(...)
+struct NewExpr : Expr {
+    std::string typeName;
+    std::vector<ExprPtr> args;
+    NewExpr(std::string t, std::vector<ExprPtr> a)
+      : typeName(std::move(t)), args(std::move(a)) {}
+    void accept(ExprVisitor* v) override { v->visit(this); }
+};
+
+// self
+struct SelfExpr : Expr {
+    void accept(ExprVisitor* v) override { v->visit(this); }
+};
+
+// base()
+struct BaseExpr : Expr {
+    void accept(ExprVisitor* v) override { v->visit(this); }
+};
+
+// objeto.miembro
+struct MemberAccessExpr : Expr {
+    ExprPtr object;
+    std::string member;
+    MemberAccessExpr(ExprPtr o, std::string m)
+      : object(std::move(o)), member(std::move(m)) {}
+    void accept(ExprVisitor* v) override { v->visit(this); }
+};
+
 
 #endif // AST_HPP

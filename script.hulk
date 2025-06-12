@@ -1,4 +1,4 @@
 function greet(name) =>
-    print("Hola " @ 2);
+    print("Hola " @ name);
 
-greet("Ana");
+greet("2, 2);

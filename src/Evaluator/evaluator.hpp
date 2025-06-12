@@ -21,20 +21,20 @@
 #include "../Value/enumerable.hpp"
 #include "../Value/iterable.hpp"
 #include "../Value/value.hpp"
-#include "env_frame.hpp"
+#include "../Scope/scope.hpp"
 
 struct EvaluatorVisitor : StmtVisitor, ExprVisitor
 {
     Value lastValue{0.0};
-    // En vez de un mapa plano, un puntero a EnvFrame
-    std::shared_ptr<EnvFrame> env;
+    // Usar Scope en lugar de EnvFrame
+    Scope<Value>::Ptr env;
 
     std::unordered_map<std::string, FunctionDecl *> functions;
 
     EvaluatorVisitor()
     {
-        // Inicializar con un frame “global” sin padre
-        env = std::make_shared<EnvFrame>(nullptr);
+        // Inicializar con un scope "global" sin padre
+        env = std::make_shared<Scope<Value>>(nullptr);
     }
 
     // Programa: recorre stmt a stmt
@@ -233,12 +233,12 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
 
             // Guardar entorno actual
             auto oldEnv = env;
-            env = std::make_shared<EnvFrame>(oldEnv);
+            env = std::make_shared<Scope<Value>>(oldEnv);
 
-            // Asignar parámetros
+            // Asignar parámetros usando declare
             for (size_t i = 0; i < f->params.size(); ++i)
             {
-                env->locals[f->params[i]] = args[i];
+                env->declare(f->params[i], args[i]);
             }
 
             // Evaluar cuerpo
@@ -380,8 +380,8 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
     void
     visit(VariableExpr *expr) override
     {
-        // get() buscará en este frame y en los padres
-        lastValue = env->get(expr->name);
+        // lookup() busca recursivamente en la cadena de scopes
+        lastValue = env->lookup(expr->name);
     }
 
     // let in expressions
@@ -392,18 +392,18 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         expr->initializer->accept(this);
         Value initVal = lastValue;
 
-        // 2) Abrir un nuevo frame (scope hijo)
-        auto oldEnv = env; // guardar el frame padre
-        env = std::make_shared<EnvFrame>(oldEnv);
+        // 2) Abrir un nuevo scope (scope hijo)
+        auto oldEnv = env; // guardar el scope padre
+        env = std::make_shared<Scope<Value>>(oldEnv);
 
-        // 3) Insertar la variable en el mapa local
-        env->locals[expr->name] = initVal;
+        // 3) Declarar la variable en el scope actual
+        env->declare(expr->name, initVal);
 
         // 4) Evaluar el cuerpo (es un Stmt)
         expr->body->accept(static_cast<StmtVisitor *>(this));
         Value result = lastValue;
 
-        // 5) Al salir, restaurar el frame anterior
+        // 5) Al salir, restaurar el scope anterior
         env = std::move(oldEnv);
 
         // 6) El valor resultante de la expresión let es el valor devuelto
@@ -418,13 +418,20 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         expr->value->accept(this);
         Value newVal = lastValue;
 
-        // Verificar que exista en alguna parte (no crear nuevas automáticamente):
-        if (!env->existsInChain(expr->name))
+        // Verificar que exista en alguna parte usando lookup (que ya lanza excepción si no existe)
+        try
+        {
+            env->lookup(expr->name); // Esto lanza excepción si no existe
+        }
+        catch (const std::runtime_error &)
         {
             throw std::runtime_error("No se puede asignar a variable no declarada: " + expr->name);
         }
-        // Llamamos a set() para que reasigne en el frame correspondiente:
-        env->set(expr->name, newVal);
+
+        // Para asignación destructiva, necesitamos implementar una función set en Scope
+        // Por ahora, usamos el mismo comportamiento que declare pero necesitaremos modificar Scope
+        // Como workaround temporal, buscamos en qué scope está y lo actualizamos
+        updateVariable(expr->name, newVal);
         lastValue = newVal;
     }
 
@@ -460,17 +467,17 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
     void
     visit(ExprBlock *b) override
     {
-        // 1) Abrir un nuevo frame (scope hijo) antes de entrar al bloque
+        // 1) Abrir un nuevo scope (scope hijo) antes de entrar al bloque
         auto oldEnv = env;
-        env = std::make_shared<EnvFrame>(oldEnv);
+        env = std::make_shared<Scope<Value>>(oldEnv);
 
-        // 2) Evaluar cada sentencia dentro del bloque con este nuevo frame
+        // 2) Evaluar cada sentencia dentro del bloque con este nuevo scope
         for (auto &stmt : b->stmts)
         {
             stmt->accept(this);
         }
 
-        // 3) Restaurar el frame anterior al salir del bloque
+        // 3) Restaurar el scope anterior al salir del bloque
         env = std::move(oldEnv);
 
         // lastValue queda con el valor del último statement ejecutado
@@ -492,6 +499,20 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             result = lastValue;
         }
         lastValue = result;
+    }
+
+private:
+    // Función auxiliar para actualizar variables existentes
+    void updateVariable(const std::string &name, const Value &newVal)
+    {
+        try
+        {
+            env->update(name, newVal);
+        }
+        catch (const std::runtime_error &)
+        {
+            throw std::runtime_error("No se puede asignar a variable no declarada: " + name);
+        }
     }
 };
 

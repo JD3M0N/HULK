@@ -1,4 +1,3 @@
-
 #pragma once
 #include <memory>
 #include <string>
@@ -13,8 +12,19 @@ struct SymbolInfo
         VARIABLE,
         FUNCTION
     } kind;
-    // Podrías añadir tipo, puntero a AST::FunctionDecl*, etc.
-    // TypeInfo type;
+    
+    // Para funciones: número de parámetros esperados
+    int arity = 0;
+    
+    // Constructor por defecto
+    SymbolInfo() : kind(VARIABLE), arity(0) {}
+
+    // Constructor para variables
+    SymbolInfo(Kind k) : kind(k) {}
+    
+    // Constructor para funciones con aridad
+    SymbolInfo(Kind k, int param_count) : kind(k), arity(param_count) {}
+
 };
 
 template <typename Info>
@@ -35,6 +45,23 @@ public:
             throw std::runtime_error("Símbolo ya declarado en este scope: " + name);
         }
         symbols_[name] = info;
+    }
+
+    /// Actualiza un símbolo existente en el scope donde fue declarado
+    void update(const std::string &name, const Info &info)
+    {
+        auto it = symbols_.find(name);
+        if (it != symbols_.end())
+        {
+            it->second = info;
+            return;
+        }
+        if (parent_)
+        {
+            parent_->update(name, info);
+            return;
+        }
+        throw std::runtime_error("No se puede actualizar símbolo no declarado: " + name);
     }
 
     /// Busca recursivamente en la cadena de scopes

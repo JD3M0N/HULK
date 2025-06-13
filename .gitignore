@@ -3,8 +3,10 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
-# 
+#
 parser.output
+parser.tab.C
+parser.tab.h
 
 # User-specific files
 *.rsuser

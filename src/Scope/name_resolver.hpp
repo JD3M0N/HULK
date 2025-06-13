@@ -129,4 +129,93 @@ public:
         expr->body->accept(this);
         currentScope_ = parent;
     }
+
+    /* ----------  Soporte para orientación a objetos  ---------- */
+
+    /* 1) Declaración de clase ---------------------------------- */
+    void visit(ClassDecl *c) override
+    {
+        /* 1-a) declarar el nombre de la clase en el scope actual */
+        if (currentScope_->existsInCurrent(c->name))
+            throw std::runtime_error("Redeclaración de clase: " + c->name);
+        currentScope_->declare(c->name, {SymbolInfo::CLASS});
+
+        /* 1-b) si hereda, verificar que el padre exista y sea CLASS */
+        if (c->parent != "Object")
+            currentScope_->lookup(c->parent);  // —simple: asumimos que es CLASS—
+
+        /* 1-c) nuevo scope “interno” para atributos/métodos        */
+        auto outer = currentScope_;
+        auto classScope = std::make_shared<SymScope>(outer);
+
+        /* 1-d) registra atributos como VARIABLES                   */
+        for (auto &attr : c->attributes)
+        {
+            if (classScope->existsInCurrent(attr.first))
+                throw std::runtime_error("Atributo repetido: " + attr.first);
+            classScope->declare(attr.first, {SymbolInfo::VARIABLE});
+            attr.second->accept(this);          // inicializador
+        }
+
+        /* 1-e) registra métodos y resuelve cuerpos                 */
+        for (auto &mStmt : c->methods)
+        {
+            auto *m = dynamic_cast<FunctionDecl *>(mStmt.get());
+            if (!m) continue; // paranoico
+
+            if (classScope->existsInCurrent(m->name))
+                throw std::runtime_error("Miembro repetido: " + m->name);
+            classScope->declare(m->name, {SymbolInfo::FUNCTION});
+
+            /* scope propio del método ---------------------------- */
+            auto save = currentScope_;
+            currentScope_ = std::make_shared<SymScope>(classScope);
+
+            /* insertar self (siempre) y base (si tiene padre) -----*/
+            currentScope_->declare("self", {SymbolInfo::VARIABLE});
+            if (c->parent != "Object")
+                currentScope_->declare("base", {SymbolInfo::VARIABLE});
+
+            /* parámetros */
+            for (auto &p : m->params)
+            {
+                if (currentScope_->existsInCurrent(p))
+                    throw std::runtime_error("Parámetro repetido: " + p);
+                currentScope_->declare(p, {SymbolInfo::VARIABLE});
+            }
+
+            m->body->accept(this);
+            currentScope_ = save;
+        }
+
+        /* no hace falta dejar classScope vivo — salimos — */
+    }
+
+    /* 2)  new Tipo( … )  ---------------------------------------- */
+    void visit(NewExpr *expr) override
+    {
+        currentScope_->lookup(expr->typeName);   // debe existir como CLASS
+        for (auto &a : expr->args)
+            a->accept(this);
+    }
+
+    /* 3)  self  -------------------------------------------------- */
+    void visit(SelfExpr *) override
+    {
+        currentScope_->lookup("self");           // error si no estamos en método
+    }
+
+    /* 4)  base  -------------------------------------------------- */
+    void visit(BaseExpr *) override
+    {
+        currentScope_->lookup("base");           // declarado sólo en métodos que heredan
+    }
+
+    /* 5)  obj.miembro  ------------------------------------------ */
+    void visit(MemberAccessExpr *expr) override
+    {
+        expr->object->accept(this);              // resuelve el LHS
+        /*  Versión simplificada: no comprobamos el miembro aquí   */
+    }
+
 };

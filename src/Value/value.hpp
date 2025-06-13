@@ -13,11 +13,30 @@
 class RangeValue;
 class RangeIterator;
 
+struct EnvFrame;
+struct ClassDecl;
+
+struct ObjectValue;
+using ObjectPtr = std::shared_ptr<ObjectValue>;
+
+struct ObjectValue
+{
+    // tabla de atributos (runtime)
+    std::shared_ptr<EnvFrame> fields;
+    // puntero a la ClassDecl estática
+    ClassDecl* klass;
+    explicit ObjectValue(ClassDecl* k,
+                         std::shared_ptr<EnvFrame> f)
+        : fields(std::move(f)), klass(k) {}
+};
+
+
 class Value
 {
 public:
     using Storage = std::variant<double, std::string, bool, std::shared_ptr<RangeValue>,
-                                 std::shared_ptr<RangeIterator>>;
+                                 std::shared_ptr<RangeIterator>,
+                                 ObjectPtr>;
 
     Value() : val(0.0) {}
     Value(double d) : val(d) {}
@@ -25,6 +44,7 @@ public:
     Value(bool b) : val(b) {}
     Value(std::shared_ptr<RangeValue> rv) : val(rv) {}
     Value(std::shared_ptr<RangeIterator> it) : val(it) {}
+    Value(ObjectPtr obj) : val(std::move(obj)) {}
 
     ~Value() = default;
 
@@ -52,6 +72,17 @@ public:
     isIterable() const
     {
         return std::holds_alternative<std::shared_ptr<RangeIterator>>(val);
+    }
+
+    bool isObject() const 
+    {
+        return std::holds_alternative<ObjectPtr>(val); 
+    }
+
+    ObjectPtr 
+    asObject() const 
+    {
+        return std::get<ObjectPtr>(val); 
     }
 
     double
@@ -109,6 +140,10 @@ public:
         if (isIterable())
         {
             return "<iterator>";
+        }
+        if (isObject())
+        {
+            return "<object>";
         }
         return "<unknown>";
     }

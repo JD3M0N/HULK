@@ -50,6 +50,7 @@ struct ClassBody {
 %start input
 
 %type  <stmt> stmt
+%type  <stmt> decl
 %type  <expr> expr 
 %type  <prog> input
 %type  <prog> program
@@ -78,6 +79,7 @@ struct ClassBody {
 %token DOT
 
 
+%nonassoc ELIF_CONTENT
 %left OR
 %left AND
 %left EQ NEQ
@@ -95,13 +97,18 @@ input:
   
 
 program:
-    /* vacío */      { $$ = new Program(); }
-  | program stmt SEMICOLON
-    {
-      $1->stmts.emplace_back( StmtPtr($2) );
-      $$ = $1;
+    /* vacío */            { $$ = new Program(); }
+
+  | program stmt SEMICOLON {
+        $1->stmts.emplace_back(StmtPtr($2));
+        $$ = $1;
     }
-;    
+
+  | program decl {
+        $1->stmts.emplace_back(StmtPtr($2));
+        $$ = $1;
+    }
+;
 
 binding_list:
     binding {
@@ -123,6 +130,36 @@ binding:
       }
 ;
 
+decl:
+    /* clase */
+    TYPE IDENT opt_inherits LBRACE class_body RBRACE {
+        ClassBody* cb = $5;
+        $$ = new ClassDecl(
+                 std::string($2),
+                 std::string($3),
+                 std::move(cb->attributes),
+                 std::move(cb->methods)
+             );
+        delete cb;
+        free($2);
+        free($3);
+    }
+
+  | /* función full-form */
+    FUNCTION IDENT LPAREN ident_list RPAREN LBRACE stmt_list RBRACE {
+        auto args  = std::move(*$4);  delete $4;
+        auto block = std::make_unique<Program>();
+        block->stmts = std::move(*$7); delete $7;
+
+        $$ = new FunctionDecl(
+                 std::string($2),
+                 std::move(args),
+                 std::move(block)
+             );
+        free($2);
+    }
+;
+
 stmt:
     
    expr
@@ -130,17 +167,6 @@ stmt:
       $$ = new ExprStmt( ExprPtr($1) );
     }
 
-  | FUNCTION IDENT LPAREN ident_list RPAREN LBRACE stmt_list RBRACE {
-          std::vector<std::string> args = std::move(*$4);
-          delete $4;
-
-          auto block = std::make_unique<Program>();
-          block->stmts = std::move(*$7);
-          delete $7;
-
-          $$ = new FunctionDecl(std::string($2), std::move(args), std::move(block));
-          free($2);
-      }
   | FUNCTION IDENT LPAREN ident_list RPAREN ARROW expr  {
           std::vector<std::string> args = std::move(*$4);
           delete $4;
@@ -149,18 +175,6 @@ stmt:
           free($2);
       }
 
-  | TYPE IDENT opt_inherits LBRACE class_body RBRACE {
-          ClassBody* cb = $5;
-          $$ = new ClassDecl(
-                   std::string($2),
-                   std::string($3),
-                   std::move(cb->attributes),
-                   std::move(cb->methods)
-               );
-          delete cb;     
-          free($2);
-          free($3);
-      }    
 ;    
 
 opt_inherits:
@@ -429,7 +443,7 @@ if_expr:
 ;
 
 elif_list:
-    ELSE expr {
+    ELSE expr %prec ELIF_CONTENT {
         $$ = $2;
     }
     | ELIF LPAREN expr RPAREN expr elif_list {

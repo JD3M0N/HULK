@@ -23,6 +23,11 @@
 #include "../Value/value.hpp"
 #include "env_frame.hpp"
 
+static std::shared_ptr<EnvFrame> makeChild(const std::shared_ptr<EnvFrame>& parent)
+{
+    return std::make_shared<EnvFrame>(parent);
+}
+
 struct EvaluatorVisitor : StmtVisitor, ExprVisitor
 {
     Value lastValue{0.0};
@@ -30,6 +35,10 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
     std::shared_ptr<EnvFrame> env;
 
     std::unordered_map<std::string, FunctionDecl *> functions;
+
+    std::unordered_map<std::string, ClassDecl*> classes;
+    Value currentSelf;              // solo válido dentro de métodos
+    ClassDecl* currentClass = nullptr;
 
     EvaluatorVisitor()
     {
@@ -41,6 +50,13 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
     void
     visit(Program *p) override
     {
+        for (auto &s : p->stmts)
+        {
+            if (auto *cd = dynamic_cast<ClassDecl*>(s.get()))
+            {
+                cd->accept(this);
+            }
+        }
         // Primero registrar TODAS las funciones
         for (auto &s : p->stmts)
         {
@@ -493,6 +509,88 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         }
         lastValue = result;
     }
+
+    void 
+    visit(ClassDecl *c) override
+    {
+        classes[c->name] = c;
+        // NOTA: no ejecutamos nada más: atributos se evaluarán al instanciar
+    }
+
+    void 
+    visit(NewExpr *expr) override
+    {
+        // 1) buscar clase
+        auto it = classes.find(expr->typeName);
+        if (it == classes.end())
+            throw std::runtime_error("Clase no declarada: " + expr->typeName);
+        ClassDecl* cls = it->second;
+
+        // 2) evaluar argumentos (simplemente los almacenamos por nombre)
+        std::vector<Value> argVals;
+        for (auto &a : expr->args)
+        {
+            a->accept(this);
+            argVals.push_back(lastValue);
+        }
+
+        /* 3) crear marco de atributos ----------------------------- */
+        auto fieldFrame = std::make_shared<EnvFrame>(nullptr);
+
+        // (a) enlazar args como variables locales
+        for (std::size_t i = 0; i < cls->attributes.size() && i < argVals.size(); ++i)
+        {
+            fieldFrame->locals[cls->attributes[i].first] = argVals[i];
+        }
+
+        // (b) evaluar inicializadores
+        for (auto &attr : cls->attributes)
+        {
+            // si ya fue inicializado por args, sáltalo
+            if (fieldFrame->locals.count(attr.first)) continue;
+
+            attr.second->accept(this);
+            fieldFrame->locals[attr.first] = lastValue;
+        }
+
+        // 4) construir objeto
+        lastValue = Value(std::make_shared<ObjectValue>(cls, fieldFrame));
+    }
+
+    void 
+    visit(SelfExpr *) override
+    {
+        if (!currentSelf.isObject())
+            throw std::runtime_error("self fuera de método");
+        lastValue = currentSelf;
+    }
+
+    void 
+    visit(BaseExpr *) override
+    {
+        if (!currentClass || currentClass->parent == "Object")
+            throw std::runtime_error("base fuera de contexto o sin superclase");
+        auto parentIt = classes.find(currentClass->parent);
+        if (parentIt == classes.end())
+            throw std::runtime_error("Clase base no encontrada");
+        lastValue = Value(std::make_shared<ObjectValue>(parentIt->second,
+                                                    currentSelf.asObject()->fields));
+    }
+
+void visit(MemberAccessExpr *expr) override
+    {
+        expr->object->accept(this);          // evalúa el objeto
+        if (!lastValue.isObject())
+            throw std::runtime_error("Acceso a miembro sobre no-objeto");
+
+        auto obj = lastValue.asObject();
+        auto it = obj->fields->locals.find(expr->member);
+        if (it == obj->fields->locals.end())
+            throw std::runtime_error("Atributo inexistente: " + expr->member);
+
+        lastValue = it->second;              // devuelve el atributo
+    }
+
 };
 
 #endif

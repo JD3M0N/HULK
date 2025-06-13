@@ -11,7 +11,8 @@ struct SymbolInfo
     enum Kind
     {
         VARIABLE,
-        FUNCTION
+        FUNCTION,
+        CLASS
     } kind;
     // Podrías añadir tipo, puntero a AST::FunctionDecl*, etc.
     // TypeInfo type;

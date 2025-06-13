@@ -1,70 +1,62 @@
 # Compilador a utilizar
-CXX = g++
+CXX        = g++
+CXXFLAGS   = -std=c++17 -Wall -I src
 
-# Flags de compilación: -std=c++17 para compatibilidad moderna, -Wall para mostrar advertencias
-CXXFLAGS = -std=c++17 -Wall -I src
-
-# Archivo fuente del lexer (Flex)
-LEXER_SRC = src/Lexer/lexer.l
-
-# Archivo fuente del parser
-PARSER_SRC = src/Parser/parser.y
-
-# Archivo generado por Flex (lo compilaremos)
-LEXER_GEN = src/Lexer/lex.yy.cpp
-
-# Archivo generado por Bison
+# Flex / Bison
+LEXER_SRC      = src/Lexer/lexer.l
+PARSER_SRC     = src/Parser/parser.y
+LEXER_GEN      = src/Lexer/lex.yy.cpp
 PARSER_GEN_CPP = src/Parser/parser.tab.cpp
 PARSER_GEN_HPP = src/Parser/parser.tab.hpp
 
-# Archivo fuente principal
-MAIN_SRC = src/main.cpp
+# Fuentes propias
+MAIN_SRC         = src/main.cpp
+TYPE_SRC         = src/Type/type.cpp
+TYPEINF_SRC      = src/Type/type_inferer.cpp
 
-# Objetos resultantes de la compilación
-OBJS = $(PARSER_GEN_CPP:.cpp=.o) $(LEXER_GEN:.cpp=.o)  $(MAIN_SRC:.cpp=.o)
+# Objetos resultantes
+OBJS = \
+  $(PARSER_GEN_CPP:.cpp=.o) \
+  $(LEXER_GEN:.cpp=.o)    \
+  $(MAIN_SRC:.cpp=.o)     \
+  $(TYPE_SRC:.cpp=.o)     \
+  $(TYPEINF_SRC:.cpp=.o)
 
-# Carpeta donde se generará el ejecutable
-BIN_DIR = hulk
-
-# Nombre del ejecutable final
+# Ejecutable
+BIN_DIR    = hulk
 EXECUTABLE = $(BIN_DIR)/hulk_executable
 
-# Target principal (default)
-all: compile
+# Target por defecto
+all: $(EXECUTABLE)
 
-# Compilación completa
-compile: $(EXECUTABLE)
-
-# Primero generar parser con Bison (genera .cpp y .hpp)
+# 1) Generar parser (Bison)
 $(PARSER_GEN_CPP) $(PARSER_GEN_HPP): $(PARSER_SRC)
 	bison -d -o $(PARSER_GEN_CPP) $(PARSER_SRC)
 
-# Luego generar lexer con Flex (después de tener parser.tab.hpp)
+# 2) Generar lexer (Flex)
 $(LEXER_GEN): $(LEXER_SRC) $(PARSER_GEN_HPP)
 	flex -o $(LEXER_GEN) $(LEXER_SRC)
 
-# Compilación de cualquier archivo .cpp en su .o correspondiente
+# 3) Compilar .cpp a .o
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Compila el ejecutable a partir de los objetos
+# 4) Linkear todos los objetos, incluido main.o
 $(EXECUTABLE): $(PARSER_GEN_CPP) $(LEXER_GEN) $(OBJS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(OBJS) -o $@
 
-# Crear carpeta 'hulk' si no existe
+# Crear carpeta de destino si hace falta
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
-# Ejecutar el programa, pasando script.hulk como argumento
-execute: compile
+# Ejecutar con un script de prueba
+execute: all
 	./$(EXECUTABLE) script.hulk
 
-# Limpiar todos los archivos generados
+# Limpieza de objetos y generados
 clean:
-	rm -f $(OBJS) $(LEXER_GEN)  $(PARSER_GEN_CPP) $(PARSER_GEN_HPP) $(EXECUTABLE)
+	rm -f $(OBJS) $(LEXER_GEN) $(PARSER_GEN_CPP) $(PARSER_GEN_HPP) $(EXECUTABLE)
 
-# Limpiar todo completamente (incluye la carpeta de binarios)
+# Limpieza total (incluye carpeta de binarios)
 distclean: clean
 	rm -rf $(BIN_DIR)
-
-# xD

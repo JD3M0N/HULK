@@ -1,1 +1,4 @@
-print("hola, tengo " @ 21 @ " años");
+function greet(name) =>
+    print("Hola " @ 2);
+
+greet("Ana");

@@ -210,6 +210,90 @@ struct PrintVisitor : StmtVisitor, ExprVisitor
         indentLevel--;
     }
 
+    void
+    visit(NewExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ NewExpr: " << expr->className << "\n";
+        indentLevel++;
+        for (const auto &arg : expr->args)
+        {
+            arg->accept(this);
+        }
+        indentLevel--;
+    }
+
+    void
+    visit(SelfExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ SelfExpr\n";
+    }
+
+    void
+    visit(BaseExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ BaseExpr\n";
+    }
+
+    void
+    visit(MemberAccessExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ MemberAccess: ." << expr->member << "\n";
+        indentLevel++;
+        expr->object->accept(this);
+        indentLevel--;
+    }
+
+    void
+    visit(ClassDecl *decl) override
+    {
+        printIndent();
+        std::cout << "|_ ClassDecl: " << decl->name;
+        if (!decl->parentName.empty())
+            std::cout << " : " << decl->parentName;
+        std::cout << "\n";
+
+        indentLevel++;
+
+        // Imprimir atributos
+        if (!decl->attributes.empty())
+        {
+            printIndent();
+            std::cout << "|_ Attributes:\n";
+            indentLevel++;
+            for (const auto &attr : decl->attributes)
+            {
+                printIndent();
+                std::cout << "|_ " << attr.first << ":\n";
+                if (attr.second)
+                {
+                    indentLevel++;
+                    attr.second->accept(this);
+                    indentLevel--;
+                }
+            }
+            indentLevel--;
+        }
+
+        // Imprimir métodos
+        if (!decl->methods.empty())
+        {
+            printIndent();
+            std::cout << "|_ Methods:\n";
+            indentLevel++;
+            for (const auto &method : decl->methods)
+            {
+                method->accept(this);
+            }
+            indentLevel--;
+        }
+
+        indentLevel--;
+    }
+
 private:
     std::string
     opToString(BinaryExpr::Op op)

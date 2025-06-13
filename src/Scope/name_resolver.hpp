@@ -155,4 +155,60 @@ public:
         expr->body->accept(this);
         currentScope_ = parent;
     }
+
+    // Métodos para programación orientada a objetos
+    void visit(NewExpr *expr) override
+    {
+        // Verificar que la clase existe (por ahora solo verificamos que esté declarada)
+        // En el futuro aquí verificarías que className sea una clase válida
+        
+        // Resolver argumentos del constructor
+        for (auto &arg : expr->args)
+            arg->accept(this);
+    }
+    
+    void visit(SelfExpr *expr) override
+    {
+        // Referencia a la instancia actual - por ahora vacío
+        // En el futuro verificarías que estés dentro de un método de clase
+    }
+    
+    void visit(BaseExpr *expr) override
+    {
+        // Referencia a la clase padre - por ahora vacío  
+        // En el futuro verificarías que haya herencia y estés en un método
+    }
+    
+    void visit(MemberAccessExpr *expr) override
+    {
+        // Resolver el objeto primero
+        expr->object->accept(this);
+        // El miembro se verificará en tiempo de ejecución por ahora
+    }
+    
+    void visit(ClassDecl *decl) override
+    {
+        // Declarar la clase en el scope actual
+        if (currentScope_->existsInCurrent(decl->name))
+            throw std::runtime_error("Redeclaración de clase: " + decl->name);
+        
+        currentScope_->declare(decl->name, SymbolInfo{SymbolInfo::FUNCTION, 0}); // Usamos FUNCTION como tipo para clases
+        
+        // Crear nuevo scope para la clase
+        auto parent = currentScope_;
+        currentScope_ = std::make_shared<SymScope>(parent);
+        
+        // Resolver atributos
+        for (auto &attr : decl->attributes)
+        {
+            if (attr.second)
+                attr.second->accept(this);
+        }
+        
+        // Resolver métodos
+        for (auto &method : decl->methods)
+            method->accept(this);
+            
+        currentScope_ = parent;
+    }
 };

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../Type/type.hpp"
@@ -27,6 +28,12 @@ struct FunctionDecl;
 struct IfExpr;
 struct ExprBlock;
 struct WhileExpr;
+struct ClassDecl;
+struct MemberDef;
+struct NewExpr;
+struct SelfExpr;
+struct BaseExpr;
+struct MemberAccessExpr;
 
 struct ExprVisitor
 {
@@ -43,6 +50,10 @@ struct ExprVisitor
     virtual void visit(IfExpr *) = 0;
     virtual void visit(ExprBlock *) = 0;
     virtual void visit(WhileExpr *) = 0;
+    virtual void visit(NewExpr *expr) = 0;
+    virtual void visit(SelfExpr *expr) = 0;
+    virtual void visit(BaseExpr *expr) = 0;
+    virtual void visit(MemberAccessExpr *expr) = 0;
     virtual ~ExprVisitor() = default;
 };
 
@@ -51,6 +62,7 @@ struct StmtVisitor
     virtual void visit(Program *) = 0;
     virtual void visit(ExprStmt *) = 0;
     virtual void visit(FunctionDecl *) = 0;
+    virtual void visit(ClassDecl *) = 0;
     virtual ~StmtVisitor() = default;
 };
 
@@ -299,6 +311,90 @@ struct WhileExpr : Expr
 
     void
     accept(ExprVisitor *v) override
+    {
+        v->visit(this);
+    }
+};
+
+// Para definir atributos y métodos de una clase
+struct MemberDef
+{
+    bool isAttribute;
+    std::pair<std::string, ExprPtr> attr;  // Cambiar de StmtPtr a pair
+    StmtPtr method;    // para métodos
+};
+
+// Declaración de clase
+struct ClassDecl : Stmt
+{
+    std::string name;
+    std::string parentName; // para herencia
+    std::vector<std::pair<std::string, ExprPtr>> attributes;  // Cambiar el tipo
+    std::vector<StmtPtr> methods;
+    
+    // Agregar constructor que acepta los vectores directamente
+    ClassDecl(const std::string &n, const std::string &parent, 
+              std::vector<std::pair<std::string, ExprPtr>> attrs,
+              std::vector<StmtPtr> meths)
+        : name(n), parentName(parent), attributes(std::move(attrs)), methods(std::move(meths)) {}
+    
+    // Mantener el constructor original para compatibilidad
+    ClassDecl(const std::string &n, const std::string &parent = "")
+        : name(n), parentName(parent) {}
+    
+    void accept(StmtVisitor *v) override
+    {
+        v->visit(this);
+    }
+};
+
+// Creación de instancia de clase
+struct NewExpr : Expr
+{
+    std::string className;
+    std::vector<ExprPtr> args;
+    
+    NewExpr(const std::string &name, std::vector<ExprPtr> arguments)
+        : className(name), args(std::move(arguments)) {}
+    
+    void accept(ExprVisitor *v) override
+    {
+        v->visit(this);
+    }
+};
+
+// Referencia a la instancia actual
+struct SelfExpr : Expr
+{
+    SelfExpr() {}
+    
+    void accept(ExprVisitor *v) override
+    {
+        v->visit(this);
+    }
+};
+
+// Referencia a la clase padre
+struct BaseExpr : Expr
+{
+    BaseExpr() {}
+    
+    void accept(ExprVisitor *v) override
+    {
+        v->visit(this);
+    }
+};
+
+// Acceso a miembros de clase
+struct MemberAccessExpr : Expr
+{
+    ExprPtr object;
+    std::string member;
+    
+    MemberAccessExpr(ExprPtr obj, const std::string &memberName)
+        : object(std::move(obj)), member(memberName) {}
+    
+    void accept(ExprVisitor *v) override
     {
         v->visit(this);
     }

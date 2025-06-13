@@ -501,6 +501,56 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         lastValue = result;
     }
 
+    void visit(NewExpr *expr) override
+    {
+        // Evaluar argumentos del constructor
+        std::vector<Value> args;
+        for (auto &arg : expr->args)
+        {
+            arg->accept(this);
+            args.push_back(lastValue);
+        }
+        
+        // Por ahora, crear un objeto simple (placeholder)
+        // En el futuro aquí crearías una instancia real de la clase
+        lastValue = Value("Instancia de " + expr->className);
+    }
+
+    void visit(SelfExpr *expr) override
+    {
+        // Por ahora, devolver un placeholder
+        // En el futuro devolvería la referencia a la instancia actual
+        lastValue = Value("self");
+    }
+
+    void visit(BaseExpr *expr) override
+    {
+        // Por ahora, devolver un placeholder
+        // En el futuro devolvería la referencia a la clase padre
+        lastValue = Value("base");
+    }
+
+    void visit(MemberAccessExpr *expr) override
+    {
+        // Evaluar el objeto
+        expr->object->accept(this);
+        Value objValue = lastValue;
+        
+        // Por ahora, devolver un placeholder para el acceso a miembro
+        // En el futuro buscarías el miembro en el objeto
+        lastValue = Value("miembro_" + expr->member);
+    }
+
+    void visit(ClassDecl *decl) override
+    {
+        // Registrar la clase para futura instanciación
+        // Por ahora, simplemente no hacer nada ya que las clases
+        // no se "ejecutan" como las funciones
+        
+        // En el futuro aquí registrarías la definición de la clase
+        // en una tabla de clases para poder crear instancias
+    }
+
 private:
     // Función auxiliar para actualizar variables existentes
     void updateVariable(const std::string &name, const Value &newVal)

@@ -178,3 +178,61 @@ void TypeInfererVisitor::visit(Program *prog)
         stmt->accept(this);
     }
 }
+
+void TypeInfererVisitor::visit(NewExpr *expr)
+{
+    // Resolver argumentos del constructor
+    for (auto &arg : expr->args)
+        arg->accept(this);
+    
+    // Por ahora, crear un tipo de clase genérico
+    expr->inferredType = std::make_shared<Type>(TypeKind::CLASS, expr->className);
+}
+
+void TypeInfererVisitor::visit(SelfExpr *expr)
+{
+    // Por ahora, usar un tipo variable que se resolverá en contexto
+    expr->inferredType = Type::makeVar();
+}
+
+void TypeInfererVisitor::visit(BaseExpr *expr)
+{
+    // Por ahora, usar un tipo variable para la clase padre
+    expr->inferredType = Type::makeVar();
+}
+
+void TypeInfererVisitor::visit(MemberAccessExpr *expr)
+{
+    // Inferir tipo del objeto
+    expr->object->accept(this);
+    
+    // Por ahora, el acceso a miembro devuelve una variable de tipo
+    expr->inferredType = Type::makeVar();
+}
+
+void TypeInfererVisitor::visit(ClassDecl *stmt)
+{
+    // Crear tipo para la clase
+    auto classType = std::make_shared<Type>(TypeKind::CLASS, stmt->name);
+    env->declare(stmt->name, classType);
+    
+    // Crear nuevo scope para la clase
+    auto parent = env;
+    env = std::make_shared<Scope<TypePtr>>(parent);
+    
+    // Inferir tipos de atributos
+    for (auto &attr : stmt->attributes)
+    {
+        if (attr.second)
+        {
+            attr.second->accept(this);
+            env->declare(attr.first, attr.second->inferredType);
+        }
+    }
+    
+    // Inferir tipos de métodos
+    for (auto &method : stmt->methods)
+        method->accept(this);
+        
+    env = parent;
+}

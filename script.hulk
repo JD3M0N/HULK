@@ -1,10 +1,4 @@
-function max(a, b) =>
-    if (a > b) a else b;
+function factorial(n) => 
+    if (n <= 1) 1 else n * factorial(n - 1);
 
-function classify(num) =>
-    if (num > 0) "positive"
-    else if (num < 0) "negative"
-    else "zero";
-    
-print(classify(-5));
-print(max(15, 8));
+let x = 5 in print(factorial(x));

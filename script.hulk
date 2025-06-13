@@ -1,6 +1,8 @@
 type Point {
     x = 0;
     y = 0;
+
+    FUNCTION f() => 24;
 }
 
 function tan(x) => sin(x) / cos(x);

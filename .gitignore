@@ -9,7 +9,7 @@ parser.tab.C
 parser.tab.h
 
 #
-srcript.hulk
+script.hulk
 
 # User-specific files
 *.rsuser

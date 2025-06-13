@@ -5,6 +5,8 @@
 
 #
 parser.output
+parser.tab.C
+parser.tab.h
 
 # script de hulk
 script.hulk

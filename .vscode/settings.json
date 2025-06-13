@@ -50,6 +50,7 @@
         "map": "cpp",
         "unordered_set": "cpp",
         "regex": "cpp",
-        "sstream": "cpp"
+        "sstream": "cpp",
+        "xutility": "cpp"
     }
 }

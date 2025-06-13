@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug HULK",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/hulk/hulk_executable.exe",
+            "args": ["script.hulk"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
+            "setupCommands": [
+                {
+                    "description": "Habilitar impresión con sangría para gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "g++.exe build active file (minGw)",
+            "internalConsoleOptions": "openOnSessionStart"
+        }
+    ]
+}

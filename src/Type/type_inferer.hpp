@@ -7,7 +7,8 @@ class TypeInfererVisitor : public ExprVisitor, public StmtVisitor
 {
     using TypePtr = std::shared_ptr<Type>;
     Scope<TypePtr>::Ptr env;
-
+    int indentLevel = 0; 
+    
 public:
     explicit TypeInfererVisitor();
 
@@ -30,4 +31,10 @@ public:
     // StmtVisitor
     void visit(ExprStmt *stmt) override;
     void visit(FunctionDecl *stmt) override;
+
+private:
+    void printIndent();
+    void printTypeInfo(const std::string& nodeType, const std::string& extra = "");
+    void printInferredType(TypePtr type);
+    std::string typeToString(TypePtr type);
 };

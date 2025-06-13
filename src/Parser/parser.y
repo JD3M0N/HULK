@@ -1,4 +1,4 @@
-    %{
+%{
 #include <iostream>
 #include <cstdlib>
 #include <cmath>
@@ -56,15 +56,16 @@ Program* rootAST = nullptr;
 %token LE GE EQ NEQ LESS_THAN GREATER_THAN OR AND
 %token LPAREN RPAREN LBRACE RBRACE COMMA SEMICOLON
 
+%right ASSIGN_DESTRUCT
 %left OR
 %left AND
 %left EQ NEQ
 %left LESS_THAN GREATER_THAN LE GE
+%left CONCAT
 %left PLUS MINUS
 %left MULT DIV MOD
-%left CONCAT
 %right POW
-%left UMINUS
+%right UMINUS UPLUS NOT
 
 %%
 
@@ -236,7 +237,7 @@ expr:
           $$ = $2;
       }
 
-    | LET binding_list IN expr {
+    | LET binding_list IN expr %prec ASSIGN_DESTRUCT {
           Expr* result = $4;
           auto& list = *$2;
 
@@ -248,16 +249,16 @@ expr:
           $$ = result;      
         }
 
-    | IDENT ASSIGN_DESTRUCT expr {
+    | IDENT ASSIGN_DESTRUCT expr %prec ASSIGN_DESTRUCT {
           $$ = new AssignExpr(std::string($1), ExprPtr($3));
           free($1);
       }
-    | WHILE LPAREN expr RPAREN expr {
+    | WHILE LPAREN expr RPAREN expr %prec ASSIGN_DESTRUCT {
       $$ = new WhileExpr(ExprPtr($3), ExprPtr($5));
     }
 
     | if_expr  
-    | FOR LPAREN IDENT IN expr RPAREN expr {
+    | FOR LPAREN IDENT IN expr RPAREN expr %prec ASSIGN_DESTRUCT {
         auto argsNext = std::vector<ExprPtr>();
         argsNext.push_back(std::make_unique<VariableExpr>("__iter"));
         ExprPtr callNext = std::make_unique<CallExpr>("next", std::move(argsNext));
@@ -296,16 +297,16 @@ expr:
 ;
 
 if_expr:
-    IF LPAREN expr RPAREN expr elif_list {
+    IF LPAREN expr RPAREN expr elif_list %prec ASSIGN_DESTRUCT {
         $$ = new IfExpr(ExprPtr($3), ExprPtr($5), ExprPtr($6));
     }
 ;
 
 elif_list:
-    ELSE expr {
+    ELSE expr %prec ASSIGN_DESTRUCT {
         $$ = $2;
     }
-    | ELIF LPAREN expr RPAREN expr elif_list {
+    | ELIF LPAREN expr RPAREN expr elif_list %prec ASSIGN_DESTRUCT {
         $$ = new IfExpr(ExprPtr($3), ExprPtr($5), ExprPtr($6));
     }
 ;

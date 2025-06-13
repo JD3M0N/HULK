@@ -26,7 +26,7 @@
 struct EvaluatorVisitor : StmtVisitor, ExprVisitor
 {
     Value lastValue{0.0};
-    // Usar Scope en lugar de EnvFrame
+    
     Scope<Value>::Ptr env;
 
     std::unordered_map<std::string, FunctionDecl *> functions;

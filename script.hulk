@@ -1,4 +1,10 @@
-function greet(name) =>
-    print("Hola " @ name);
+function max(a, b) =>
+    if (a > b) a else b;
 
-greet("2, 2);
+function classify(num) =>
+    if (num > 0) "positive"
+    else if (num < 0) "negative"
+    else "zero";
+    
+print(classify(-5));
+print(max(15, 8));

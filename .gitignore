@@ -6,6 +6,9 @@
 #
 parser.output
 
+# script de hulk
+script.hulk
+
 # User-specific files
 *.rsuser
 *.suo

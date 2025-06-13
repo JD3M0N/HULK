@@ -8,6 +8,9 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "../Errors/location.hpp"
+
+#include "../Type/type.hpp"
 
 struct Program;
 struct NumberExpr;
@@ -65,8 +68,18 @@ struct StmtVisitor
 // Base class for all expression nodes
 struct Expr
 {
+    Location location;
+
+    // Constructor que recibe ubicación
+    Expr(const Location &loc = Location()) : location(loc) {}
+
     virtual void accept(ExprVisitor *v) = 0;
+    std::shared_ptr<Type> inferredType; // para almacenar el resultado de la inferencia
     virtual ~Expr() = default;
+
+    int getLine() const { return location.line; }
+    int getColumn() const { return location.column; }
+    const Location &getLocation() const { return location; }
 };
 
 using ExprPtr = std::unique_ptr<Expr>;

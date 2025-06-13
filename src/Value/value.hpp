@@ -148,6 +148,23 @@ public:
         return "<unknown>";
     }
 
+    // Método para obtener el nombre del tipo como string
+    std::string
+    getTypeName() const
+    {
+        if (isNumber())
+            return "número";
+        if (isString())
+            return "texto";
+        if (isBool())
+            return "booleano";
+        if (isIterable())
+            return "iterable";
+        if (isRange())
+            return "rango";
+        return "desconocido";
+    }
+
 private:
     Storage val;
     friend std::ostream &operator<<(std::ostream &os, const Value &v);

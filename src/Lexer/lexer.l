@@ -13,17 +13,32 @@
 #include "../Parser/parser.tab.hpp"
 
 extern int yylineno;
+int yycolumn = 1;
 
-// Necesario para evitar conflictos con strdup (definido en <string.h>)
-#ifdef strdup
-#undef strdup
-#endif
+// Estructura para almacenar la ubicación - reemplaza el uso de yylloc
+typedef struct {
+    int first_line;
+    int first_column;
+    int last_line;
+    int last_column;
+} TokenLocation;
+
+TokenLocation current_location;
+
+// Macro para actualizar la columna
+#define YY_USER_ACTION \
+    { \
+        current_location.first_line = current_location.last_line = yylineno; \
+        current_location.first_column = yycolumn; \
+        current_location.last_column = yycolumn + yyleng - 1; \
+        yycolumn += yyleng; \
+    }
 %}
 
 %%
 
-\n                          { yylineno++; }
-[ \t\r]+                    { /* skip whitespace */ }
+\n                          { yylineno++; yycolumn = 1; }
+[ \t\r]+                    { /* skip whitespace, but update column */ }
 
 [0-9]+(\.[0-9]+)?           {
                               yylval.expr = new NumberExpr(atof(yytext));

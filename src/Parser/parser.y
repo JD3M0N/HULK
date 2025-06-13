@@ -7,7 +7,6 @@
 #include "../PrintVisitor/print_visitor.hpp"
 #include "../Value/value.hpp"
 #include "../Evaluator/evaluator.hpp"
-#include "../Errors/location.hpp"
 
 using ExprPtr = std::unique_ptr<Expr>;
 using ProgramPtr = std::unique_ptr<Program>;
@@ -15,7 +14,6 @@ using ProgramPtr = std::unique_ptr<Program>;
 using namespace std;
 extern int yylex();
 extern int yylineno;
-extern int yycolumn; 
 void yyerror(const char* s);
 
 Program* rootAST = nullptr;
@@ -80,8 +78,11 @@ struct ClassBody {
 %token TYPE INHERITS NEW SELF BASE
 %token DOT
 
-
+// Agregar precedencias para resolver conflictos
 %nonassoc ELIF_CONTENT
+%right ASSIGN_DESTRUCT      // Asignación destructiva tiene baja precedencia
+%right LET                  // LET tiene baja precedencia
+%right WHILE FOR            // WHILE y FOR tienen baja precedencia  
 %left OR
 %left AND
 %left EQ NEQ
@@ -90,7 +91,13 @@ struct ClassBody {
 %left MULT DIV MOD
 %left CONCAT
 %right POW
+%left DOT                   // DOT tiene alta precedencia (acceso a miembros)
 %left UMINUS
+
+// Agregar nuevos tokens de precedencia para las construcciones especiales:
+%nonassoc LET_IN_PREC
+%nonassoc WHILE_PREC
+%nonassoc FOR_PREC
 
 %%
 
@@ -234,8 +241,22 @@ member_def:
         free($2);
     }
 
-  | /* método inline */
-    FUNCTION IDENT LPAREN ident_list RPAREN ARROW expr {
+      | /* método full-form sin FUNCTION */
+    IDENT LPAREN ident_list RPAREN LBRACE stmt_list RBRACE {
+        auto args  = std::move(*$3); delete $3;
+        auto block = std::make_unique<Program>();
+        block->stmts = std::move(*$6); delete $6;
+
+        FunctionDecl* fn = new FunctionDecl(
+                               $1,
+                               std::move(args),
+                               std::move(block));
+        $$ = new MemberDef{ false, {}, StmtPtr(fn) };
+        free($1);
+    }
+
+  | /* método inline con FUNCTION*/
+    FUNCTION IDENT LPAREN ident_list RPAREN ARROW expr SEMICOLON {
         /* posiciones
             1: FUNCTION
             2: IDENT
@@ -254,6 +275,19 @@ member_def:
                                StmtPtr(body));
         $$ = new MemberDef{ false, {}, StmtPtr(fn) };
         free($2);
+    }
+
+      | /* método inline sin FUNCTION */
+    IDENT LPAREN ident_list RPAREN ARROW expr SEMICOLON {
+        auto argsVec = std::move(*$3); delete $3;
+        ExprStmt* body = new ExprStmt(ExprPtr($6));
+
+        FunctionDecl* fn = new FunctionDecl(
+                               $1,
+                               std::move(argsVec),
+                               StmtPtr(body));
+        $$ = new MemberDef{ false, {}, StmtPtr(fn) };
+        free($1);
     }
 ;
 
@@ -314,7 +348,6 @@ expr:
           $$ = new BinaryExpr(BinaryExpr::OP_MOD, ExprPtr($1), ExprPtr($3));
       }
 
-
     | expr PLUS expr {
           $$ = new BinaryExpr(BinaryExpr::OP_ADD, ExprPtr($1), ExprPtr($3));
       }
@@ -356,7 +389,6 @@ expr:
       }
 
     | expr CONCAT expr {
-        // Creamos un BinaryExpr con OP_CONCAT
         $$ = new BinaryExpr(BinaryExpr::OP_CONCAT, ExprPtr($1), ExprPtr($3));
     }  
 
@@ -364,7 +396,7 @@ expr:
           $$ = $2;
       }
 
-    | LET binding_list IN expr {
+    | LET binding_list IN expr %prec LET_IN_PREC {
           Expr* result = $4;
           auto& list = *$2;
 
@@ -380,12 +412,12 @@ expr:
           $$ = new AssignExpr(std::string($1), ExprPtr($3));
           free($1);
       }
-    | WHILE LPAREN expr RPAREN expr {
+    | WHILE LPAREN expr RPAREN expr %prec WHILE_PREC {
       $$ = new WhileExpr(ExprPtr($3), ExprPtr($5));
     }
 
     | if_expr  
-    | FOR LPAREN IDENT IN expr RPAREN expr {
+    | FOR LPAREN IDENT IN expr RPAREN expr %prec FOR_PREC {
         auto argsNext = std::vector<ExprPtr>();
         argsNext.push_back(std::make_unique<VariableExpr>("__iter"));
         ExprPtr callNext = std::make_unique<CallExpr>("next", std::move(argsNext));
@@ -434,8 +466,16 @@ expr:
     | expr DOT IDENT {
         $$ = new MemberAccessExpr( ExprPtr($1), std::string($3) );
         free($3);
-    }  
-
+    }
+      | expr DOT IDENT ASSIGN_DESTRUCT expr {
+        // ATAJO: expr := MemberAssignExpr(object, member, value)
+        $$ = new MemberAssignExpr(
+                 ExprPtr($1),
+                 std::string($3),
+                 ExprPtr($5)
+             );
+        free($3);
+    }
 ;
 
 if_expr:

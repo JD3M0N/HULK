@@ -28,10 +28,10 @@
 #include "../Errors/error_types/runtime_error.hpp"
 #include "../Errors/error_types/value_error.hpp"
 
-static std::shared_ptr<EnvFrame> makeChild(const std::shared_ptr<EnvFrame>& parent)
-{
-    return std::make_shared<EnvFrame>(parent);
-}
+// static std::shared_ptr<EnvFrame> makeChild(const std::shared_ptr<EnvFrame>& parent)
+// {
+//     return std::make_shared<EnvFrame>(parent);
+// }
 
 struct EvaluatorVisitor : StmtVisitor, ExprVisitor
 {
@@ -41,9 +41,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
 
     std::unordered_map<std::string, FunctionDecl *> functions;
 
-    std::unordered_map<std::string, ClassDecl*> classes;
-    Value currentSelf;              // solo válido dentro de métodos
-    ClassDecl* currentClass = nullptr;
+    std::unordered_map<std::string, ClassDecl *> classes;
+    Value currentSelf; // solo válido dentro de métodos
+    ClassDecl *currentClass = nullptr;
 
     EvaluatorVisitor()
     {
@@ -57,7 +57,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
     {
         for (auto &s : p->stmts)
         {
-            if (auto *cd = dynamic_cast<ClassDecl*>(s.get()))
+            if (auto *cd = dynamic_cast<ClassDecl *>(s.get()))
             {
                 cd->accept(this);
             }
@@ -129,9 +129,8 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<TypeError>(
                     "ambos miembros en una suma deben ser números",
-                    Location(e->getLine(), e->getColumn())
-                );
-                return; 
+                    Location(e->getLine(), e->getColumn()));
+                return;
             }
             lastValue = Value(l.asNumber() + r.asNumber());
             break;
@@ -140,8 +139,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<TypeError>(
                     "ambos miembros en una resta deben ser números",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asNumber() - r.asNumber());
@@ -151,10 +149,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isNumber() || !r.isNumber())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en multiplicación: se esperan dos números pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en multiplicación: se esperan dos números pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asNumber() * r.asNumber());
@@ -163,18 +160,16 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isNumber() || !r.isNumber())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en división: se esperan dos números pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en división: se esperan dos números pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             if (r.asNumber() == 0)
             {
                 ErrorManager::getInstance().report<RuntimeError>(
                     "División por cero no permitida",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asNumber() / r.asNumber());
@@ -185,16 +180,14 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<TypeError>(
                     "Ambos operandos del operador '%' deben ser números",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             if (r.asNumber() == 0)
             {
                 ErrorManager::getInstance().report<RuntimeError>(
                     "Operación de módulo por cero no permitida",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(fmod(l.asNumber(), r.asNumber()));
@@ -204,10 +197,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isNumber() || !r.isNumber())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en potencia: se esperan dos números pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en potencia: se esperan dos números pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(pow(l.asNumber(), r.asNumber()));
@@ -217,10 +209,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isNumber() || !r.isNumber())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en comparación '<': se esperan dos números pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en comparación '<': se esperan dos números pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asNumber() < r.asNumber() ? true : false);
@@ -230,10 +221,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isNumber() || !r.isNumber())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en comparación '>': se esperan dos números pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en comparación '>': se esperan dos números pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asNumber() > r.asNumber() ? true : false);
@@ -243,10 +233,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isNumber() || !r.isNumber())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en comparación '<=': se esperan dos números pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en comparación '<=': se esperan dos números pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asNumber() <= r.asNumber() ? true : false);
@@ -256,10 +245,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isNumber() || !r.isNumber())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en comparación '>=': se esperan dos números pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en comparación '>=': se esperan dos números pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asNumber() >= r.asNumber() ? true : false);
@@ -269,10 +257,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isNumber() || !r.isNumber())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en comparación '==': se esperan dos números pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en comparación '==': se esperan dos números pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asNumber() == r.asNumber() ? true : false);
@@ -282,10 +269,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isNumber() || !r.isNumber())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en comparación '!=': se esperan dos números pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en comparación '!=': se esperan dos números pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asNumber() != r.asNumber() ? true : false);
@@ -295,10 +281,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isBool() || !r.isBool())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en operador '||': se esperan dos booleanos pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en operador '||': se esperan dos booleanos pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asBool() || r.asBool() ? true : false);
@@ -308,10 +293,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isBool() || !r.isBool())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en operador '&&': se esperan dos booleanos pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en operador '&&': se esperan dos booleanos pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asBool() && r.asBool() ? true : false);
@@ -320,10 +304,9 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (!l.isString() || !r.isString())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "Error de tipo en concatenación: se esperan dos cadenas pero se recibieron '" + 
-                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "Error de tipo en concatenación: se esperan dos cadenas pero se recibieron '" +
+                        l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(l.asString() + r.asString());
@@ -332,8 +315,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         default:
             ErrorManager::getInstance().report<RuntimeError>(
                 "Operador desconocido o no implementado",
-                Location(e->getLine(), e->getColumn())
-            );
+                Location(e->getLine(), e->getColumn()));
             return;
         }
     }
@@ -358,9 +340,8 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<RuntimeError>(
                     "Número incorrecto de argumentos para función '" + f->name + "': " +
-                    "esperados " + std::to_string(f->params.size()) + ", recibidos " + std::to_string(args.size()),
-                    Location(e->getLine(), e->getColumn())
-                );
+                        "esperados " + std::to_string(f->params.size()) + ", recibidos " + std::to_string(args.size()),
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
 
@@ -390,8 +371,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<TypeError>(
                     "La función 'range' espera 2 argumentos numéricos",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             double start = args[0].asNumber();
@@ -406,16 +386,14 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<RuntimeError>(
                     "La función 'iter' espera exactamente 1 argumento",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             if (!args[0].isRange())
             {
                 ErrorManager::getInstance().report<TypeError>(
                     "La función 'iter' espera un valor iterable, pero recibió un '" + args[0].getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             auto rv = args[0].asRange();
@@ -429,8 +407,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<TypeError>(
                     "La función 'next'/'current' espera 1 argumento de tipo Iterable",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             auto itr = args[0].asIterable();
@@ -444,8 +421,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<TypeError>(
                     "La función 'next'/'current' espera 1 argumento de tipo Iterable",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             auto itr = args[0].asIterable();
@@ -458,8 +434,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<RuntimeError>(
                     "La función 'print' espera exactamente 1 argumento",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             std::cout << args[0] << std::endl;
@@ -471,33 +446,30 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             if (args.size() != 1)
             {
                 ErrorManager::getInstance().report<RuntimeError>(
-                    "La función 'sqrt' espera exactamente 1 argumento, pero se recibieron " + 
-                    std::to_string(args.size()),
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "La función 'sqrt' espera exactamente 1 argumento, pero se recibieron " +
+                        std::to_string(args.size()),
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
-            
+
             if (!args[0].isNumber())
             {
                 ErrorManager::getInstance().report<TypeError>(
-                    "La función 'sqrt' espera un número, pero se recibió un '" + 
-                    args[0].getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "La función 'sqrt' espera un número, pero se recibió un '" +
+                        args[0].getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
-            
+
             if (args[0].asNumber() < 0)
             {
                 ErrorManager::getInstance().report<ValueError>(
-                    "No se puede calcular la raíz cuadrada de un número negativo: " + 
-                    args[0].toString(),
-                    Location(e->getLine(), e->getColumn())
-                );
+                    "No se puede calcular la raíz cuadrada de un número negativo: " +
+                        args[0].toString(),
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
-            
+
             lastValue = Value(std::sqrt(args[0].asNumber()));
             return;
         }
@@ -512,46 +484,42 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
                     {
                         ErrorManager::getInstance().report<TypeError>(
                             "La función 'log' espera un número, pero recibió un '" + args[0].getTypeName() + "'",
-                            Location(e->getLine(), e->getColumn())
-                        );
+                            Location(e->getLine(), e->getColumn()));
                         return;
                     }
-                    
+
                     if (args[0].asNumber() <= 0)
                     {
                         ErrorManager::getInstance().report<ValueError>(
                             "No se puede calcular el logaritmo de un número no positivo: " + args[0].toString(),
-                            Location(e->getLine(), e->getColumn())
-                        );
+                            Location(e->getLine(), e->getColumn()));
                         return;
                     }
-                    
+
                     lastValue = Value(std::log(args[0].asNumber()));
                     return;
                 }
-                
+
                 // Caso de 2 argumentos: log en base específica
                 double base = args[0].asNumber();
                 double x = args[1].asNumber();
-                
+
                 if (base <= 0 || base == 1)
                 {
                     ErrorManager::getInstance().report<ValueError>(
                         "Base inválida para logaritmo: debe ser positiva y distinta de 1",
-                        Location(e->getLine(), e->getColumn())
-                    );
+                        Location(e->getLine(), e->getColumn()));
                     return;
                 }
-                
+
                 if (x <= 0)
                 {
                     ErrorManager::getInstance().report<ValueError>(
                         "No se puede calcular el logaritmo de un número no positivo",
-                        Location(e->getLine(), e->getColumn())
-                    );
+                        Location(e->getLine(), e->getColumn()));
                     return;
                 }
-                
+
                 lastValue = Value(std::log(x) / std::log(base));
                 return;
             }
@@ -559,8 +527,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<RuntimeError>(
                     "La función 'log' espera 1 o 2 argumentos, pero recibió " + std::to_string(args.size()),
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
         }
@@ -570,8 +537,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<RuntimeError>(
                     "La función 'sin'/'cos' espera exactamente 1 argumento",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
 
@@ -579,8 +545,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<TypeError>(
                     "La función 'sin'/'cos' espera un número, pero recibió un '" + args[0].getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(std::sin(args[0].asNumber()));
@@ -592,8 +557,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<RuntimeError>(
                     "La función 'sin'/'cos' espera exactamente 1 argumento",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
 
@@ -601,8 +565,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<TypeError>(
                     "La función 'sin'/'cos' espera un número, pero recibió un '" + args[0].getTypeName() + "'",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(std::cos(args[0].asNumber()));
@@ -619,8 +582,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<RuntimeError>(
                     "La constante 'PI'/'E' no acepta argumentos",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(M_PI);
@@ -632,8 +594,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
             {
                 ErrorManager::getInstance().report<RuntimeError>(
                     "La constante 'PI'/'E' no acepta argumentos",
-                    Location(e->getLine(), e->getColumn())
-                );
+                    Location(e->getLine(), e->getColumn()));
                 return;
             }
             lastValue = Value(M_E);
@@ -643,8 +604,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         {
             ErrorManager::getInstance().report<NameError>(
                 "Función no definida: '" + e->callee + "'",
-                Location(e->getLine(), e->getColumn())
-            );
+                Location(e->getLine(), e->getColumn()));
             return;
         }
     }
@@ -657,11 +617,10 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         {
             ErrorManager::getInstance().report<NameError>(
                 "Variable no definida: '" + expr->name + "'",
-                Location(expr->getLine(), expr->getColumn())
-            );
+                Location(expr->getLine(), expr->getColumn()));
             return;
         }
-        
+
         // get() buscará en este frame y en los padres
         lastValue = env->get(expr->name);
     }
@@ -705,8 +664,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         {
             ErrorManager::getInstance().report<NameError>(
                 "No se puede asignar a variable no declarada: '" + expr->name + "'",
-                Location(expr->getLine(), expr->getColumn())
-            );
+                Location(expr->getLine(), expr->getColumn()));
             return;
         }
         // Llamamos a set() para que reasigne en el frame correspondiente:
@@ -732,8 +690,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         {
             ErrorManager::getInstance().report<TypeError>(
                 "La condición de un if debe ser booleana",
-                Location(e->condition->getLine(), e->condition->getColumn())
-            );
+                Location(e->condition->getLine(), e->condition->getColumn()));
             return;
         }
 
@@ -784,21 +741,21 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         lastValue = result;
     }
 
-    void 
+    void
     visit(ClassDecl *c) override
     {
         classes[c->name] = c;
         // NOTA: no ejecutamos nada más: atributos se evaluarán al instanciar
     }
 
-    void 
+    void
     visit(NewExpr *expr) override
     {
         // 1) buscar clase
         auto it = classes.find(expr->typeName);
         if (it == classes.end())
             throw std::runtime_error("Clase no declarada: " + expr->typeName);
-        ClassDecl* cls = it->second;
+        ClassDecl *cls = it->second;
 
         // 2) evaluar argumentos (simplemente los almacenamos por nombre)
         std::vector<Value> argVals;
@@ -821,7 +778,8 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         for (auto &attr : cls->attributes)
         {
             // si ya fue inicializado por args, sáltalo
-            if (fieldFrame->locals.count(attr.first)) continue;
+            if (fieldFrame->locals.count(attr.first))
+                continue;
 
             attr.second->accept(this);
             fieldFrame->locals[attr.first] = lastValue;
@@ -831,7 +789,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         lastValue = Value(std::make_shared<ObjectValue>(cls, fieldFrame));
     }
 
-    void 
+    void
     visit(SelfExpr *) override
     {
         if (!currentSelf.isObject())
@@ -839,7 +797,7 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         lastValue = currentSelf;
     }
 
-    void 
+    void
     visit(BaseExpr *) override
     {
         if (!currentClass || currentClass->parent == "Object")
@@ -848,12 +806,12 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         if (parentIt == classes.end())
             throw std::runtime_error("Clase base no encontrada");
         lastValue = Value(std::make_shared<ObjectValue>(parentIt->second,
-                                                    currentSelf.asObject()->fields));
+                                                        currentSelf.asObject()->fields));
     }
 
-void visit(MemberAccessExpr *expr) override
+    void visit(MemberAccessExpr *expr) override
     {
-        expr->object->accept(this);          // evalúa el objeto
+        expr->object->accept(this); // evalúa el objeto
         if (!lastValue.isObject())
             throw std::runtime_error("Acceso a miembro sobre no-objeto");
 
@@ -862,9 +820,26 @@ void visit(MemberAccessExpr *expr) override
         if (it == obj->fields->locals.end())
             throw std::runtime_error("Atributo inexistente: " + expr->member);
 
-        lastValue = it->second;              // devuelve el atributo
+        lastValue = it->second; // devuelve el atributo
     }
 
+    void visit(MemberAssignExpr *expr) override
+    {
+        // 1) Evalúa el objeto
+        expr->object->accept(this);
+        if (!lastValue.isObject())
+            throw std::runtime_error("MemberAssign sobre no-objeto");
+        auto obj = lastValue.asObject();
+
+        // 2) Evalúa el valor
+        expr->value->accept(this);
+        Value v = lastValue;
+
+        // 3) Asigna en el fields frame del objeto:
+        obj->fields->set(expr->member, v);
+
+        lastValue = v;
+    }
 };
 
 #endif

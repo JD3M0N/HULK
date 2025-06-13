@@ -142,7 +142,7 @@ public:
 
         /* 1-b) si hereda, verificar que el padre exista y sea CLASS */
         if (c->parent != "Object")
-            currentScope_->lookup(c->parent);  // —simple: asumimos que es CLASS—
+            currentScope_->lookup(c->parent); // —simple: asumimos que es CLASS—
 
         /* 1-c) nuevo scope “interno” para atributos/métodos        */
         auto outer = currentScope_;
@@ -154,14 +154,15 @@ public:
             if (classScope->existsInCurrent(attr.first))
                 throw std::runtime_error("Atributo repetido: " + attr.first);
             classScope->declare(attr.first, {SymbolInfo::VARIABLE});
-            attr.second->accept(this);          // inicializador
+            attr.second->accept(this); // inicializador
         }
 
         /* 1-e) registra métodos y resuelve cuerpos                 */
         for (auto &mStmt : c->methods)
         {
             auto *m = dynamic_cast<FunctionDecl *>(mStmt.get());
-            if (!m) continue; // paranoico
+            if (!m)
+                continue; // paranoico
 
             if (classScope->existsInCurrent(m->name))
                 throw std::runtime_error("Miembro repetido: " + m->name);
@@ -194,7 +195,7 @@ public:
     /* 2)  new Tipo( … )  ---------------------------------------- */
     void visit(NewExpr *expr) override
     {
-        currentScope_->lookup(expr->typeName);   // debe existir como CLASS
+        currentScope_->lookup(expr->typeName); // debe existir como CLASS
         for (auto &a : expr->args)
             a->accept(this);
     }
@@ -202,20 +203,26 @@ public:
     /* 3)  self  -------------------------------------------------- */
     void visit(SelfExpr *) override
     {
-        currentScope_->lookup("self");           // error si no estamos en método
+        currentScope_->lookup("self"); // error si no estamos en método
     }
 
     /* 4)  base  -------------------------------------------------- */
     void visit(BaseExpr *) override
     {
-        currentScope_->lookup("base");           // declarado sólo en métodos que heredan
+        currentScope_->lookup("base"); // declarado sólo en métodos que heredan
     }
 
     /* 5)  obj.miembro  ------------------------------------------ */
     void visit(MemberAccessExpr *expr) override
     {
-        expr->object->accept(this);              // resuelve el LHS
+        expr->object->accept(this); // resuelve el LHS
         /*  Versión simplificada: no comprobamos el miembro aquí   */
     }
 
+    void visit(MemberAssignExpr *expr) override
+    {
+        expr->object->accept(this);
+        // Verifica que expr->member exista en el scope del objeto si lo deseas:
+        expr->value->accept(this);
+    }
 };

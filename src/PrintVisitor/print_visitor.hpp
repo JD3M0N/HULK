@@ -274,7 +274,16 @@ struct PrintVisitor : StmtVisitor, ExprVisitor
         indentLevel++;
         expr->object->accept(this);
         indentLevel--;
-    }    
+    }
+    void visit(MemberAssignExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ MemberAssign: " << expr->member << "\n";
+        indentLevel++;
+        expr->object->accept(this);
+        expr->value->accept(this);
+        indentLevel--;
+    }
 
 private:
     std::string

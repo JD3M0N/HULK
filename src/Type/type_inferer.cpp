@@ -173,3 +173,54 @@ void TypeInfererVisitor::visit(Program *prog)
         stmt->accept(this);
     }
 }
+
+void TypeInfererVisitor::visit(ClassDecl *decl)
+{
+    // Inferimos cada inicializador de atributo:
+    for (auto &attr : decl->attributes)
+    {
+        attr.second->accept(this);
+    }
+    // Inferimos cada método (FunctionDecl*)
+    for (auto &m : decl->methods)
+    {
+        m->accept(this);
+    }
+    // No devolvemos nada; las declaraciones de clase no son expresiones
+}
+
+void TypeInfererVisitor::visit(NewExpr *expr)
+{
+    // Inferimos los argumentos
+    for (auto &arg : expr->args)
+    {
+        arg->accept(this);
+    }
+    // El tipo resultante de `new T(...)` es la clase T
+    expr->inferredType = std::make_shared<Type>(TypeKind::CLASS, expr->typeName);
+}
+
+void TypeInfererVisitor::visit(SelfExpr *expr)
+{
+    expr->inferredType = Type::makeVar();
+}
+
+void TypeInfererVisitor::visit(BaseExpr *expr)
+{
+    expr->inferredType = Type::makeVar();
+}
+void TypeInfererVisitor::visit(MemberAccessExpr *expr)
+{
+    // Inferimos el objeto, y luego hacemos stub para el miembro:
+    expr->object->accept(this);
+    expr->inferredType = Type::makeVar();
+}
+
+void TypeInfererVisitor::visit(MemberAssignExpr *expr)
+{
+    expr->object->accept(this);
+    expr->value->accept(this);
+    // Stub: unificamos el tipo del valor con el tipo declarado del atributo,
+    // o simplemente propagamos el tipo de expr->value:
+    expr->inferredType = expr->value->inferredType;
+}

@@ -22,6 +22,11 @@
 #include "../Value/iterable.hpp"
 #include "../Value/value.hpp"
 #include "env_frame.hpp"
+#include "../Errors/error_handler.hpp"
+#include "../Errors/error_types/type_error.hpp"
+#include "../Errors/error_types/name_error.hpp"
+#include "../Errors/error_types/runtime_error.hpp"
+#include "../Errors/error_types/value_error.hpp"
 
 static std::shared_ptr<EnvFrame> makeChild(const std::shared_ptr<EnvFrame>& parent)
 {
@@ -122,106 +127,214 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         case BinaryExpr::OP_ADD:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error("ambos miembros en una suma deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "ambos miembros en una suma deben ser números",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return; 
             }
             lastValue = Value(l.asNumber() + r.asNumber());
             break;
         case BinaryExpr::OP_SUB:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error("ambos miembros en una resta deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "ambos miembros en una resta deben ser números",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             lastValue = Value(l.asNumber() - r.asNumber());
             break;
+        // Operador de multiplicación
         case BinaryExpr::OP_MUL:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error(
-                    "ambos miembros en una multiplicacion deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en multiplicación: se esperan dos números pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             lastValue = Value(l.asNumber() * r.asNumber());
             break;
         case BinaryExpr::OP_DIV:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error("ambos miembros en una division deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en división: se esperan dos números pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
+            if (r.asNumber() == 0)
+            {
+                ErrorManager::getInstance().report<RuntimeError>(
+                    "División por cero no permitida",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             lastValue = Value(l.asNumber() / r.asNumber());
             break;
+        // Para operación módulo
         case BinaryExpr::OP_MOD:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error(
-                    "ambos miembros en una operacion de resto deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "Ambos operandos del operador '%' deben ser números",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
+            if (r.asNumber() == 0)
+            {
+                ErrorManager::getInstance().report<RuntimeError>(
+                    "Operación de módulo por cero no permitida",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             lastValue = Value(fmod(l.asNumber(), r.asNumber()));
             break;
+        // Operador de potencia
         case BinaryExpr::OP_POW:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error("ambos miembros en una potencia deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en potencia: se esperan dos números pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             lastValue = Value(pow(l.asNumber(), r.asNumber()));
             break;
+        // Operador menor que
         case BinaryExpr::OP_LT:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error("ambos miembros en una comparacion deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en comparación '<': se esperan dos números pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             lastValue = Value(l.asNumber() < r.asNumber() ? true : false);
             break;
+        // Operador mayor que
         case BinaryExpr::OP_GT:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error("ambos miembros en una comparacion deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en comparación '>': se esperan dos números pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             lastValue = Value(l.asNumber() > r.asNumber() ? true : false);
             break;
+        // Operador menor o igual que
         case BinaryExpr::OP_LE:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error("ambos miembros en una comparacion deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en comparación '<=': se esperan dos números pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             lastValue = Value(l.asNumber() <= r.asNumber() ? true : false);
             break;
+        // Operador mayor o igual que
         case BinaryExpr::OP_GE:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error("ambos miembros en una comparacion deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en comparación '>=': se esperan dos números pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             lastValue = Value(l.asNumber() >= r.asNumber() ? true : false);
             break;
+        // Operador de igualdad
         case BinaryExpr::OP_EQ:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error("ambos miembros en una comparacion deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en comparación '==': se esperan dos números pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             lastValue = Value(l.asNumber() == r.asNumber() ? true : false);
             break;
+        // Operador de desigualdad
         case BinaryExpr::OP_NEQ:
             if (!l.isNumber() || !r.isNumber())
             {
-                throw std::runtime_error("ambos miembros en una comparacion deben ser numeros");
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en comparación '!=': se esperan dos números pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             lastValue = Value(l.asNumber() != r.asNumber() ? true : false);
             break;
+        // Operador OR lógico
         case BinaryExpr::OP_OR:
             if (!l.isBool() || !r.isBool())
-                throw std::runtime_error("and requiere booleanos");
+            {
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en operador '||': se esperan dos booleanos pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
             lastValue = Value(l.asBool() || r.asBool() ? true : false);
             break;
+        // Operador AND lógico
         case BinaryExpr::OP_AND:
+            if (!l.isBool() || !r.isBool())
+            {
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en operador '&&': se esperan dos booleanos pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
             lastValue = Value(l.asBool() && r.asBool() ? true : false);
             break;
         case BinaryExpr::OP_CONCAT:
-        {
-            std::string ls = l.toString();
-            std::string rs = r.toString();
-            lastValue = Value(ls + rs);
-        }
-        break;
+            if (!l.isString() || !r.isString())
+            {
+                ErrorManager::getInstance().report<TypeError>(
+                    "Error de tipo en concatenación: se esperan dos cadenas pero se recibieron '" + 
+                    l.getTypeName() + "' y '" + r.getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
+            lastValue = Value(l.asString() + r.asString());
+            break;
+        // Caso por defecto
         default:
-            throw std::runtime_error("Operador desconocido");
+            ErrorManager::getInstance().report<RuntimeError>(
+                "Operador desconocido o no implementado",
+                Location(e->getLine(), e->getColumn())
+            );
+            return;
         }
     }
 
@@ -243,8 +356,12 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
 
             if (f->params.size() != args.size())
             {
-                throw std::runtime_error("Número incorrecto de argumentos para función: " +
-                                         f->name);
+                ErrorManager::getInstance().report<RuntimeError>(
+                    "Número incorrecto de argumentos para función '" + f->name + "': " +
+                    "esperados " + std::to_string(f->params.size()) + ", recibidos " + std::to_string(args.size()),
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
 
             // Guardar entorno actual
@@ -271,7 +388,11 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         {
             if (args.size() != 2 || !args[0].isNumber() || !args[1].isNumber())
             {
-                throw std::runtime_error("range() espera 2 argumentos numéricos");
+                ErrorManager::getInstance().report<TypeError>(
+                    "La función 'range' espera 2 argumentos numéricos",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             double start = args[0].asNumber();
             double end = args[1].asNumber();
@@ -283,22 +404,34 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         {
             if (args.size() != 1)
             {
-                throw std::runtime_error("iter() espera 1 argumento");
-            }
-            if (args[0].isRange())
-            {
-                auto rv = args[0].asRange();
-                auto itr = rv->iter();
-                lastValue = Value(itr);
+                ErrorManager::getInstance().report<RuntimeError>(
+                    "La función 'iter' espera exactamente 1 argumento",
+                    Location(e->getLine(), e->getColumn())
+                );
                 return;
             }
-            throw std::runtime_error("iter(): el argumento no es Enumerable");
+            if (!args[0].isRange())
+            {
+                ErrorManager::getInstance().report<TypeError>(
+                    "La función 'iter' espera un valor iterable, pero recibió un '" + args[0].getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
+            auto rv = args[0].asRange();
+            auto itr = rv->iter();
+            lastValue = Value(itr);
+            return;
         }
         else if (e->callee == "next")
         {
             if (args.size() != 1 || !args[0].isIterable())
             {
-                throw std::runtime_error("next() espera 1 argumento Iterable");
+                ErrorManager::getInstance().report<TypeError>(
+                    "La función 'next'/'current' espera 1 argumento de tipo Iterable",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             auto itr = args[0].asIterable();
             bool hay = itr->next();
@@ -309,7 +442,11 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         {
             if (args.size() != 1 || !args[0].isIterable())
             {
-                throw std::runtime_error("current() espera 1 argumento Iterable");
+                ErrorManager::getInstance().report<TypeError>(
+                    "La función 'next'/'current' espera 1 argumento de tipo Iterable",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
             auto itr = args[0].asIterable();
             lastValue = itr->current();
@@ -318,7 +455,13 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         else if (e->callee == "print")
         {
             if (args.size() != 1)
-                throw std::runtime_error("print espera 1 argumento");
+            {
+                ErrorManager::getInstance().report<RuntimeError>(
+                    "La función 'print' espera exactamente 1 argumento",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
             std::cout << args[0] << std::endl;
             lastValue = args[0];
             return;
@@ -326,44 +469,142 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         else if (e->callee == "sqrt")
         {
             if (args.size() != 1)
-                throw std::runtime_error("sqrt() espera 1 argumento");
+            {
+                ErrorManager::getInstance().report<RuntimeError>(
+                    "La función 'sqrt' espera exactamente 1 argumento, pero se recibieron " + 
+                    std::to_string(args.size()),
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
+            
+            if (!args[0].isNumber())
+            {
+                ErrorManager::getInstance().report<TypeError>(
+                    "La función 'sqrt' espera un número, pero se recibió un '" + 
+                    args[0].getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
+            
+            if (args[0].asNumber() < 0)
+            {
+                ErrorManager::getInstance().report<ValueError>(
+                    "No se puede calcular la raíz cuadrada de un número negativo: " + 
+                    args[0].toString(),
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
+            
             lastValue = Value(std::sqrt(args[0].asNumber()));
             return;
         }
         else if (e->callee == "log")
         {
-            if (args.size() == 1)
+            if (args.size() == 1 || args.size() == 2)
             {
-                lastValue = Value(std::log(args[0].asNumber()));
-                return;
-            }
-            else if (args.size() == 2)
-            {
+                // Caso de 1 argumento: log natural
+                if (args.size() == 1)
+                {
+                    if (!args[0].isNumber())
+                    {
+                        ErrorManager::getInstance().report<TypeError>(
+                            "La función 'log' espera un número, pero recibió un '" + args[0].getTypeName() + "'",
+                            Location(e->getLine(), e->getColumn())
+                        );
+                        return;
+                    }
+                    
+                    if (args[0].asNumber() <= 0)
+                    {
+                        ErrorManager::getInstance().report<ValueError>(
+                            "No se puede calcular el logaritmo de un número no positivo: " + args[0].toString(),
+                            Location(e->getLine(), e->getColumn())
+                        );
+                        return;
+                    }
+                    
+                    lastValue = Value(std::log(args[0].asNumber()));
+                    return;
+                }
+                
+                // Caso de 2 argumentos: log en base específica
                 double base = args[0].asNumber();
                 double x = args[1].asNumber();
+                
                 if (base <= 0 || base == 1)
-                    throw std::runtime_error("Base inválida para log()");
+                {
+                    ErrorManager::getInstance().report<ValueError>(
+                        "Base inválida para logaritmo: debe ser positiva y distinta de 1",
+                        Location(e->getLine(), e->getColumn())
+                    );
+                    return;
+                }
+                
                 if (x <= 0)
-                    throw std::runtime_error("Argumento inválido para log()");
+                {
+                    ErrorManager::getInstance().report<ValueError>(
+                        "No se puede calcular el logaritmo de un número no positivo",
+                        Location(e->getLine(), e->getColumn())
+                    );
+                    return;
+                }
+                
                 lastValue = Value(std::log(x) / std::log(base));
                 return;
             }
             else
             {
-                throw std::runtime_error("log() espera 1 o 2 argumentos");
+                ErrorManager::getInstance().report<RuntimeError>(
+                    "La función 'log' espera 1 o 2 argumentos, pero recibió " + std::to_string(args.size()),
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
             }
         }
         else if (e->callee == "sin")
         {
             if (args.size() != 1)
-                throw std::runtime_error("sin() espera 1 argumento");
+            {
+                ErrorManager::getInstance().report<RuntimeError>(
+                    "La función 'sin'/'cos' espera exactamente 1 argumento",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
+
+            if (!args[0].isNumber())
+            {
+                ErrorManager::getInstance().report<TypeError>(
+                    "La función 'sin'/'cos' espera un número, pero recibió un '" + args[0].getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
             lastValue = Value(std::sin(args[0].asNumber()));
             return;
         }
         else if (e->callee == "cos")
         {
             if (args.size() != 1)
-                throw std::runtime_error("cos() espera 1 argumento");
+            {
+                ErrorManager::getInstance().report<RuntimeError>(
+                    "La función 'sin'/'cos' espera exactamente 1 argumento",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
+
+            if (!args[0].isNumber())
+            {
+                ErrorManager::getInstance().report<TypeError>(
+                    "La función 'sin'/'cos' espera un número, pero recibió un '" + args[0].getTypeName() + "'",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
             lastValue = Value(std::cos(args[0].asNumber()));
             return;
         }
@@ -375,20 +616,36 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         else if (e->callee == "PI")
         {
             if (!args.empty())
-                throw std::runtime_error("PI no toma argumentos");
+            {
+                ErrorManager::getInstance().report<RuntimeError>(
+                    "La constante 'PI'/'E' no acepta argumentos",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
             lastValue = Value(M_PI);
             return;
         }
         else if (e->callee == "E")
         {
             if (!args.empty())
-                throw std::runtime_error("E no toma argumentos");
+            {
+                ErrorManager::getInstance().report<RuntimeError>(
+                    "La constante 'PI'/'E' no acepta argumentos",
+                    Location(e->getLine(), e->getColumn())
+                );
+                return;
+            }
             lastValue = Value(M_E);
             return;
         }
         else
         {
-            throw std::runtime_error("Función desconocida: " + e->callee);
+            ErrorManager::getInstance().report<NameError>(
+                "Función no definida: '" + e->callee + "'",
+                Location(e->getLine(), e->getColumn())
+            );
+            return;
         }
     }
 
@@ -396,6 +653,15 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
     void
     visit(VariableExpr *expr) override
     {
+        if (!env->existsInChain(expr->name))
+        {
+            ErrorManager::getInstance().report<NameError>(
+                "Variable no definida: '" + expr->name + "'",
+                Location(expr->getLine(), expr->getColumn())
+            );
+            return;
+        }
+        
         // get() buscará en este frame y en los padres
         lastValue = env->get(expr->name);
     }
@@ -437,7 +703,11 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         // Verificar que exista en alguna parte (no crear nuevas automáticamente):
         if (!env->existsInChain(expr->name))
         {
-            throw std::runtime_error("No se puede asignar a variable no declarada: " + expr->name);
+            ErrorManager::getInstance().report<NameError>(
+                "No se puede asignar a variable no declarada: '" + expr->name + "'",
+                Location(expr->getLine(), expr->getColumn())
+            );
+            return;
         }
         // Llamamos a set() para que reasigne en el frame correspondiente:
         env->set(expr->name, newVal);
@@ -460,7 +730,11 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
         e->condition->accept(this);
         if (!lastValue.isBool())
         {
-            throw std::runtime_error("La condición de un if debe ser booleana");
+            ErrorManager::getInstance().report<TypeError>(
+                "La condición de un if debe ser booleana",
+                Location(e->condition->getLine(), e->condition->getColumn())
+            );
+            return;
         }
 
         if (lastValue.asBool())

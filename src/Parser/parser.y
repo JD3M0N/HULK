@@ -1,4 +1,4 @@
-    %{
+%{
 #include <iostream>
 #include <cstdlib>
 #include <cmath>
@@ -7,6 +7,7 @@
 #include "../PrintVisitor/print_visitor.hpp"
 #include "../Value/value.hpp"
 #include "../Evaluator/evaluator.hpp"
+#include "../Errors/location.hpp"
 
 using ExprPtr = std::unique_ptr<Expr>;
 using ProgramPtr = std::unique_ptr<Program>;
@@ -14,6 +15,7 @@ using ProgramPtr = std::unique_ptr<Program>;
 using namespace std;
 extern int yylex();
 extern int yylineno;
+extern int yycolumn; 
 void yyerror(const char* s);
 
 Program* rootAST = nullptr;

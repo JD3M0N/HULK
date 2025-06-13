@@ -23,11 +23,6 @@
 #include "../Value/value.hpp"
 #include "env_frame.hpp"
 
-static std::shared_ptr<EnvFrame> makeChild(const std::shared_ptr<EnvFrame>& parent)
-{
-    return std::make_shared<EnvFrame>(parent);
-}
-
 struct EvaluatorVisitor : StmtVisitor, ExprVisitor
 {
     Value lastValue{0.0};

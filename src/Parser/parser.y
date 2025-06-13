@@ -1,4 +1,4 @@
-    %{
+%{
 #include <iostream>
 #include <cstdlib>
 #include <cmath>
@@ -78,8 +78,11 @@ struct ClassBody {
 %token TYPE INHERITS NEW SELF BASE
 %token DOT
 
-
+// Agregar precedencias para resolver conflictos
 %nonassoc ELIF_CONTENT
+%right ASSIGN_DESTRUCT      // Asignación destructiva tiene baja precedencia
+%right LET                  // LET tiene baja precedencia
+%right WHILE FOR            // WHILE y FOR tienen baja precedencia  
 %left OR
 %left AND
 %left EQ NEQ
@@ -88,7 +91,13 @@ struct ClassBody {
 %left MULT DIV MOD
 %left CONCAT
 %right POW
+%left DOT                   // DOT tiene alta precedencia (acceso a miembros)
 %left UMINUS
+
+// Agregar nuevos tokens de precedencia para las construcciones especiales:
+%nonassoc LET_IN_PREC
+%nonassoc WHILE_PREC
+%nonassoc FOR_PREC
 
 %%
 
@@ -312,7 +321,6 @@ expr:
           $$ = new BinaryExpr(BinaryExpr::OP_MOD, ExprPtr($1), ExprPtr($3));
       }
 
-
     | expr PLUS expr {
           $$ = new BinaryExpr(BinaryExpr::OP_ADD, ExprPtr($1), ExprPtr($3));
       }
@@ -354,7 +362,6 @@ expr:
       }
 
     | expr CONCAT expr {
-        // Creamos un BinaryExpr con OP_CONCAT
         $$ = new BinaryExpr(BinaryExpr::OP_CONCAT, ExprPtr($1), ExprPtr($3));
     }  
 
@@ -362,7 +369,7 @@ expr:
           $$ = $2;
       }
 
-    | LET binding_list IN expr {
+    | LET binding_list IN expr %prec LET_IN_PREC {
           Expr* result = $4;
           auto& list = *$2;
 
@@ -378,12 +385,12 @@ expr:
           $$ = new AssignExpr(std::string($1), ExprPtr($3));
           free($1);
       }
-    | WHILE LPAREN expr RPAREN expr {
+    | WHILE LPAREN expr RPAREN expr %prec WHILE_PREC {
       $$ = new WhileExpr(ExprPtr($3), ExprPtr($5));
     }
 
     | if_expr  
-    | FOR LPAREN IDENT IN expr RPAREN expr {
+    | FOR LPAREN IDENT IN expr RPAREN expr %prec FOR_PREC {
         auto argsNext = std::vector<ExprPtr>();
         argsNext.push_back(std::make_unique<VariableExpr>("__iter"));
         ExprPtr callNext = std::make_unique<CallExpr>("next", std::move(argsNext));

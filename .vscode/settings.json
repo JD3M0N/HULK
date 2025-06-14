@@ -51,18 +51,27 @@
         "unordered_set": "cpp",
         "regex": "cpp",
         "sstream": "cpp",
+<<<<<<< HEAD
         "xutility": "cpp",
         "cstring": "cpp",
         "list": "cpp",
         "fstream": "cpp",
         "iomanip": "cpp",
+=======
+        "cstring": "cpp",
+        "list": "cpp",
+        "fstream": "cpp",
+>>>>>>> main
         "cinttypes": "cpp",
         "charconv": "cpp",
         "format": "cpp",
         "ios": "cpp",
         "locale": "cpp",
         "queue": "cpp",
+<<<<<<< HEAD
         "stack": "cpp",
+=======
+>>>>>>> main
         "variant": "cpp",
         "xfacet": "cpp",
         "xhash": "cpp",
@@ -77,6 +86,11 @@
         "xmemory": "cpp",
         "xstring": "cpp",
         "xtr1common": "cpp",
+<<<<<<< HEAD
         "xtree": "cpp"
+=======
+        "xtree": "cpp",
+        "xutility": "cpp"
+>>>>>>> main
     }
 }

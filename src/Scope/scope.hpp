@@ -10,7 +10,8 @@ struct SymbolInfo
     enum Kind
     {
         VARIABLE,
-        FUNCTION
+        FUNCTION,
+        CLASS
     } kind;
     
     // Para funciones: número de parámetros esperados

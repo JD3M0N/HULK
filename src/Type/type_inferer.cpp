@@ -179,60 +179,53 @@ void TypeInfererVisitor::visit(Program *prog)
     }
 }
 
+void TypeInfererVisitor::visit(ClassDecl *decl)
+{
+    // Inferimos cada inicializador de atributo:
+    for (auto &attr : decl->attributes)
+    {
+        attr.second->accept(this);
+    }
+    // Inferimos cada método (FunctionDecl*)
+    for (auto &m : decl->methods)
+    {
+        m->accept(this);
+    }
+    // No devolvemos nada; las declaraciones de clase no son expresiones
+}
+
 void TypeInfererVisitor::visit(NewExpr *expr)
 {
-    // Resolver argumentos del constructor
+    // Inferimos los argumentos
     for (auto &arg : expr->args)
+    {
         arg->accept(this);
-    
-    // Por ahora, crear un tipo de clase genérico
-    expr->inferredType = std::make_shared<Type>(TypeKind::CLASS, expr->className);
+    }
+    // El tipo resultante de `new T(...)` es la clase T
+    expr->inferredType = std::make_shared<Type>(TypeKind::CLASS, expr->typeName);
 }
 
 void TypeInfererVisitor::visit(SelfExpr *expr)
 {
-    // Por ahora, usar un tipo variable que se resolverá en contexto
     expr->inferredType = Type::makeVar();
 }
 
 void TypeInfererVisitor::visit(BaseExpr *expr)
 {
-    // Por ahora, usar un tipo variable para la clase padre
     expr->inferredType = Type::makeVar();
 }
-
 void TypeInfererVisitor::visit(MemberAccessExpr *expr)
 {
-    // Inferir tipo del objeto
+    // Inferimos el objeto, y luego hacemos stub para el miembro:
     expr->object->accept(this);
-    
-    // Por ahora, el acceso a miembro devuelve una variable de tipo
     expr->inferredType = Type::makeVar();
 }
 
-void TypeInfererVisitor::visit(ClassDecl *stmt)
+void TypeInfererVisitor::visit(MemberAssignExpr *expr)
 {
-    // Crear tipo para la clase
-    auto classType = std::make_shared<Type>(TypeKind::CLASS, stmt->name);
-    env->declare(stmt->name, classType);
-    
-    // Crear nuevo scope para la clase
-    auto parent = env;
-    env = std::make_shared<Scope<TypePtr>>(parent);
-    
-    // Inferir tipos de atributos
-    for (auto &attr : stmt->attributes)
-    {
-        if (attr.second)
-        {
-            attr.second->accept(this);
-            env->declare(attr.first, attr.second->inferredType);
-        }
-    }
-    
-    // Inferir tipos de métodos
-    for (auto &method : stmt->methods)
-        method->accept(this);
-        
-    env = parent;
+    expr->object->accept(this);
+    expr->value->accept(this);
+    // Stub: unificamos el tipo del valor con el tipo declarado del atributo,
+    // o simplemente propagamos el tipo de expr->value:
+    expr->inferredType = expr->value->inferredType;
 }

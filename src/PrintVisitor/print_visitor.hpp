@@ -210,87 +210,78 @@ struct PrintVisitor : StmtVisitor, ExprVisitor
         indentLevel--;
     }
 
-    void
-    visit(NewExpr *expr) override
+    // === Soporte para clases y OO ===
+
+    // Declaración de clase
+    void visit(ClassDecl *c) override
     {
         printIndent();
-        std::cout << "|_ NewExpr: " << expr->className << "\n";
+        std::cout << "|_ ClassDecl: " << c->name;
+        if (c->parent != "Object")
+            std::cout << " inherits " << c->parent;
+        std::cout << "\n";
         indentLevel++;
-        for (const auto &arg : expr->args)
+
+        // Atributos
+        for (auto &attr : c->attributes)
         {
-            arg->accept(this);
+            printIndent();
+            std::cout << "|_ Attribute: " << attr.first << "\n";
+            indentLevel++;
+            attr.second->accept(this);
+            indentLevel--;
         }
+
+        // Métodos
+        for (auto &m : c->methods)
+        {
+            m->accept(this);
+        }
+
         indentLevel--;
     }
 
-    void
-    visit(SelfExpr *expr) override
+    // new Tipo(arg1, arg2, …)
+    void visit(NewExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ NewExpr: " << expr->typeName << "\n";
+        indentLevel++;
+        for (auto &arg : expr->args)
+            arg->accept(this);
+        indentLevel--;
+    }
+
+    // self
+    void visit(SelfExpr * /*unused*/) override
     {
         printIndent();
         std::cout << "|_ SelfExpr\n";
     }
 
-    void
-    visit(BaseExpr *expr) override
+    // base
+    void visit(BaseExpr * /*unused*/) override
     {
         printIndent();
         std::cout << "|_ BaseExpr\n";
     }
 
-    void
-    visit(MemberAccessExpr *expr) override
+    // objeto.miembro
+    void visit(MemberAccessExpr *expr) override
     {
         printIndent();
-        std::cout << "|_ MemberAccess: ." << expr->member << "\n";
+        std::cout << "|_ MemberAccess: " << expr->member << "\n";
         indentLevel++;
         expr->object->accept(this);
         indentLevel--;
     }
-
-    void
-    visit(ClassDecl *decl) override
+    void visit(MemberAssignExpr *expr) override
     {
         printIndent();
-        std::cout << "|_ ClassDecl: " << decl->name;
-        if (!decl->parentName.empty())
-            std::cout << " : " << decl->parentName;
-        std::cout << "\n";
-
+        std::cout << "|_ MemberAssign: " << expr->member << "\n";
         indentLevel++;
-
-        // Imprimir atributos
-        if (!decl->attributes.empty())
-        {
-            printIndent();
-            std::cout << "|_ Attributes:\n";
-            indentLevel++;
-            for (const auto &attr : decl->attributes)
-            {
-                printIndent();
-                std::cout << "|_ " << attr.first << ":\n";
-                if (attr.second)
-                {
-                    indentLevel++;
-                    attr.second->accept(this);
-                    indentLevel--;
-                }
-            }
-            indentLevel--;
-        }
-
-        // Imprimir métodos
-        if (!decl->methods.empty())
-        {
-            printIndent();
-            std::cout << "|_ Methods:\n";
-            indentLevel++;
-            for (const auto &method : decl->methods)
-            {
-                method->accept(this);
-            }
-            indentLevel--;
-        }
-
+        expr->object->accept(this);
+        expr->value->accept(this);
         indentLevel--;
     }
 

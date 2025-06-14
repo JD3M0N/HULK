@@ -1,152 +1,81 @@
 // value.hpp
 #pragma once
 
-#ifndef VALUE_HPP
-#define VALUE_HPP
-
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <variant>
+#include <vector>
+#include <unordered_map>
+#include "../Scope/scope.hpp"
 
-class RangeValue;
-class RangeIterator;
+// Forward declarations
+struct RangeValue;
+struct IterableValue;
+struct ObjectValue;
+struct ClassDecl;
 
 class Value
 {
 public:
-    using Storage = std::variant<double, std::string, bool, std::shared_ptr<RangeValue>,
-                                 std::shared_ptr<RangeIterator>>;
-
-    Value() : val(0.0) {}
-    Value(double d) : val(d) {}
-    Value(const std::string &s) : val(s) {}
-    Value(bool b) : val(b) {}
-    Value(std::shared_ptr<RangeValue> rv) : val(rv) {}
-    Value(std::shared_ptr<RangeIterator> it) : val(it) {}
-
-    ~Value() = default;
-
-    bool
-    isNumber() const
+    enum Type
     {
-        return std::holds_alternative<double>(val);
-    }
-    bool
-    isString() const
-    {
-        return std::holds_alternative<std::string>(val);
-    }
-    bool
-    isBool() const
-    {
-        return std::holds_alternative<bool>(val);
-    }
-    bool
-    isRange() const
-    {
-        return std::holds_alternative<std::shared_ptr<RangeValue>>(val);
-    }
-    bool
-    isIterable() const
-    {
-        return std::holds_alternative<std::shared_ptr<RangeIterator>>(val);
-    }
-
-    double
-    asNumber() const
-    {
-        return std::get<double>(val);
-    }
-    const std::string &
-    asString() const
-    {
-        return std::get<std::string>(val);
-    }
-    bool
-    asBool() const
-    {
-        return std::get<bool>(val);
-    }
-    std::shared_ptr<RangeValue>
-    asRange() const
-    {
-        if (!isRange())
-            throw std::runtime_error("Value no es RangeValue");
-        return std::get<std::shared_ptr<RangeValue>>(val);
-    }
-    std::shared_ptr<RangeIterator>
-    asIterable() const
-    {
-        if (!isIterable())
-            throw std::runtime_error("Value no es RangeIterator");
-        return std::get<std::shared_ptr<RangeIterator>>(val);
-    }
-
-    std::string
-    toString() const
-    {
-        if (isString())
-        {
-            return asString();
-        }
-        if (isNumber())
-        {
-            // Convierte double a string sin ceros inútiles
-            std::ostringstream oss;
-            oss << asNumber();
-            return oss.str();
-        }
-        if (isBool())
-        {
-            return asBool() ? "true" : "false";
-        }
-        if (isRange())
-        {
-            return "<range>";
-        }
-        if (isIterable())
-        {
-            return "<iterator>";
-        }
-        return "<unknown>";
-    }
+        NUMBER,
+        STRING,
+        BOOLEAN,
+        OBJECT,
+        RANGE,
+        ITERABLE
+    };
 
 private:
-    Storage val;
-    friend std::ostream &operator<<(std::ostream &os, const Value &v);
+    Type type_;
+    double number_;
+    std::string string_;
+    bool boolean_;
+    std::shared_ptr<ObjectValue> object_;
+    std::shared_ptr<RangeValue> range_;
+    std::shared_ptr<IterableValue> iterable_;
+
+public:
+    // Constructores
+    Value() : type_(NUMBER), number_(0.0) {}
+    Value(double n) : type_(NUMBER), number_(n) {}
+    Value(const std::string &s) : type_(STRING), string_(s) {}
+    Value(bool b) : type_(BOOLEAN), boolean_(b) {}
+    Value(std::shared_ptr<ObjectValue> obj) : type_(OBJECT), object_(obj) {}
+    Value(std::shared_ptr<RangeValue> r) : type_(RANGE), range_(r) {}
+    Value(std::shared_ptr<IterableValue> it) : type_(ITERABLE), iterable_(it) {}
+
+    // Getters de tipo
+    bool isNumber() const { return type_ == NUMBER; }
+    bool isString() const { return type_ == STRING; }
+    bool isBool() const { return type_ == BOOLEAN; }
+    bool isObject() const { return type_ == OBJECT; }
+    bool isRange() const { return type_ == RANGE; }
+    bool isIterable() const { return type_ == ITERABLE; }
+
+    // Conversiones
+    double asNumber() const { return number_; }
+    const std::string &asString() const { return string_; }
+    bool asBool() const { return boolean_; }
+    std::shared_ptr<ObjectValue> asObject() const { return object_; }
+    std::shared_ptr<RangeValue> asRange() const { return range_; }
+    std::shared_ptr<IterableValue> asIterable() const { return iterable_; }
 };
 
-inline std::ostream &
-operator<<(std::ostream &os, const Value &v)
+// Estructura para objetos - ahora usa Scope en lugar de EnvFrame
+struct ObjectValue
 {
-    if (v.isNumber())
-    {
-        os << v.asNumber();
-    }
-    else if (v.isBool())
-    {
-        os << (v.asBool() ? "true" : "false");
-    }
-    else if (v.isString())
-    {
-        os << "\"" << v.asString() << "\"";
-    }
-    else if (v.isRange())
-    {
-        os << "<range>";
-    }
-    else if (v.isIterable())
-    {
-        os << "<iterator>";
-    }
-    else
-    {
-        os << "<unknown>";
-    }
+    std::string className;
+    Scope<Value>::Ptr fields; // Cambiado de EnvFrame a Scope<Value>
+    ClassDecl *classDef;
 
-    return os;
-}
-
-#endif
+    ObjectValue(const std::string &name, ClassDecl *def) 
+        : className(name), classDef(def)
+    {
+        // Crear un scope para los campos del objeto
+        fields = std::make_shared<Scope<Value>>(nullptr);
+    }
+};

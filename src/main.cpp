@@ -74,9 +74,18 @@ int main(int argc, char *argv[])
 
     // 5) Ejecución
     std::cout << "\n=== Ejecucion ===\n";
-    EvaluatorVisitor evaluator;
-    rootAST->accept(&evaluator);
+    try
+    {
+        EvaluatorVisitor evaluator;
+        rootAST->accept(&evaluator);
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "Error de ejecución: " << e.what() << "\n";
+        std::fclose(file);
+        return 4;
+    }
 
-    std::fclose(file);
+    fclose(file);
     return 0;
 }

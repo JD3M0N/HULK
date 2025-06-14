@@ -3,6 +3,14 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+#
+parser.output
+parser.tab.C
+parser.tab.h
+
+# script de hulk
+script.hulk
+
 # User-specific files
 *.rsuser
 *.suo

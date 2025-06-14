@@ -30,6 +30,7 @@ public:
     void visit(SelfExpr *expr) override;
     void visit(BaseExpr *expr) override;
     void visit(MemberAccessExpr *expr) override;
+    void visit(MemberAssignExpr *expr) override;
 
     // StmtVisitor
     void visit(ExprStmt *stmt) override;

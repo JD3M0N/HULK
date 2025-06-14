@@ -1,4 +1,10 @@
-function factorial(n) => 
-    if (n <= 1) 1 else n * factorial(n - 1);
+type Point {
+    x = 0;
+    y = 0;
 
-let x = 5 in print(factorial(x));
+    getX() => self.x;
+    getY() => self.y;
+
+    setX(x) => self.x := x;
+    setY(y) => self.y := y;
+}

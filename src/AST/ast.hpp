@@ -12,6 +12,20 @@
 
 #include "../Type/type.hpp"
 
+// Estructura simple para ubicación
+struct Location {
+    int line = 0;
+    int column = 0;
+    
+    Location() = default;
+    Location(int l, int c) : line(l), column(c) {}
+    
+    std::string toString() const {
+        return "line " + std::to_string(line) + ", column " + std::to_string(column);
+    }
+};
+
+// Forward declarations
 struct Program;
 struct NumberExpr;
 struct StringExpr;
@@ -28,13 +42,15 @@ struct FunctionDecl;
 struct IfExpr;
 struct ExprBlock;
 struct WhileExpr;
-struct ClassDecl;
-struct MemberDef;
-struct NewExpr;
-struct SelfExpr;
-struct BaseExpr;
-struct MemberAccessExpr;
 
+struct NewExpr;
+struct BaseExpr;
+struct SelfExpr;
+struct MemberAccessExpr;
+struct MemberAssignExpr;
+struct ClassDecl;
+
+// Visitors
 struct ExprVisitor
 {
     virtual void visit(Program *prog) = 0;
@@ -54,6 +70,7 @@ struct ExprVisitor
     virtual void visit(SelfExpr *expr) = 0;
     virtual void visit(BaseExpr *expr) = 0;
     virtual void visit(MemberAccessExpr *expr) = 0;
+    virtual void visit(MemberAssignExpr *expr) = 0;
     virtual ~ExprVisitor() = default;
 };
 
@@ -62,16 +79,24 @@ struct StmtVisitor
     virtual void visit(Program *) = 0;
     virtual void visit(ExprStmt *) = 0;
     virtual void visit(FunctionDecl *) = 0;
-    virtual void visit(ClassDecl *) = 0;
+    virtual void visit(ClassDecl *decl) = 0;
     virtual ~StmtVisitor() = default;
 };
 
 // Base class for all expression nodes
 struct Expr
 {
+    Location location;
+
+    Expr(const Location &loc = Location()) : location(loc) {}
+
     virtual void accept(ExprVisitor *v) = 0;
-    std::shared_ptr<Type> inferredType; // para almacenar el resultado de la inferencia
+    std::shared_ptr<Type> inferredType;
     virtual ~Expr() = default;
+
+    int getLine() const { return location.line; }
+    int getColumn() const { return location.column; }
+    const Location &getLocation() const { return location; }
 };
 
 using ExprPtr = std::unique_ptr<Expr>;
@@ -316,88 +341,76 @@ struct WhileExpr : Expr
     }
 };
 
-// Para definir atributos y métodos de una clase
+// Para distinguir atributos vs métodos en parser.y
 struct MemberDef
 {
     bool isAttribute;
-    std::pair<std::string, ExprPtr> attr;  // Cambiar de StmtPtr a pair
-    StmtPtr method;    // para métodos
+    std::pair<std::string, ExprPtr> attr;
+    StmtPtr method;
 };
 
 // Declaración de clase
 struct ClassDecl : Stmt
 {
     std::string name;
-    std::string parentName; // para herencia
-    std::vector<std::pair<std::string, ExprPtr>> attributes;  // Cambiar el tipo
+    std::string parent;
+    std::vector<std::pair<std::string, ExprPtr>> attributes;
     std::vector<StmtPtr> methods;
-    
-    // Agregar constructor que acepta los vectores directamente
-    ClassDecl(const std::string &n, const std::string &parent, 
+
+    ClassDecl(std::string n, std::string p,
               std::vector<std::pair<std::string, ExprPtr>> attrs,
-              std::vector<StmtPtr> meths)
-        : name(n), parentName(parent), attributes(std::move(attrs)), methods(std::move(meths)) {}
-    
-    // Mantener el constructor original para compatibilidad
-    ClassDecl(const std::string &n, const std::string &parent = "")
-        : name(n), parentName(parent) {}
-    
-    void accept(StmtVisitor *v) override
-    {
-        v->visit(this);
-    }
+              std::vector<StmtPtr> m)
+        : name(std::move(n)), parent(std::move(p)),
+          attributes(std::move(attrs)), methods(std::move(m)) {}
+
+    void accept(StmtVisitor *v) override { v->visit(this); }
 };
 
-// Creación de instancia de clase
+// new Tipo(...)
 struct NewExpr : Expr
 {
-    std::string className;
+    std::string typeName;
     std::vector<ExprPtr> args;
-    
-    NewExpr(const std::string &name, std::vector<ExprPtr> arguments)
-        : className(name), args(std::move(arguments)) {}
-    
-    void accept(ExprVisitor *v) override
-    {
-        v->visit(this);
-    }
+    NewExpr(std::string t, std::vector<ExprPtr> a)
+        : typeName(std::move(t)), args(std::move(a)) {}
+    void accept(ExprVisitor *v) override { v->visit(this); }
 };
 
-// Referencia a la instancia actual
+// self
 struct SelfExpr : Expr
 {
-    SelfExpr() {}
-    
-    void accept(ExprVisitor *v) override
-    {
-        v->visit(this);
-    }
+    void accept(ExprVisitor *v) override { v->visit(this); }
 };
 
-// Referencia a la clase padre
+// base()
 struct BaseExpr : Expr
 {
-    BaseExpr() {}
-    
-    void accept(ExprVisitor *v) override
-    {
-        v->visit(this);
-    }
+    void accept(ExprVisitor *v) override { v->visit(this); }
 };
 
-// Acceso a miembros de clase
+// objeto.miembro
 struct MemberAccessExpr : Expr
 {
     ExprPtr object;
     std::string member;
-    
-    MemberAccessExpr(ExprPtr obj, const std::string &memberName)
-        : object(std::move(obj)), member(memberName) {}
-    
-    void accept(ExprVisitor *v) override
+    MemberAccessExpr(ExprPtr o, std::string m)
+        : object(std::move(o)), member(std::move(m)) {}
+    void accept(ExprVisitor *v) override { v->visit(this); }
+};
+
+// ast.hpp, tras MemberAccessExpr
+struct MemberAssignExpr : Expr
+{
+    ExprPtr object;     // la expresión de objeto, ej. `self`
+    std::string member; // el nombre del miembro, ej. "x"
+    ExprPtr value;      // la expresión a asignar, ej. `x`
+    MemberAssignExpr(ExprPtr o, std::string m, ExprPtr v)
+        : object(std::move(o)),
+          member(std::move(m)),
+          value(std::move(v))
     {
-        v->visit(this);
     }
+    void accept(ExprVisitor *v) override { v->visit(this); }
 };
 
 #endif // AST_HPP

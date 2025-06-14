@@ -13,17 +13,32 @@
 #include "../Parser/parser.tab.hpp"
 
 extern int yylineno;
+int yycolumn = 1;
 
-// Necesario para evitar conflictos con strdup (definido en <string.h>)
-#ifdef strdup
-#undef strdup
-#endif
+// Estructura para almacenar la ubicación - reemplaza el uso de yylloc
+typedef struct {
+    int first_line;
+    int first_column;
+    int last_line;
+    int last_column;
+} TokenLocation;
+
+TokenLocation current_location;
+
+// Macro para actualizar la columna
+#define YY_USER_ACTION \
+    { \
+        current_location.first_line = current_location.last_line = yylineno; \
+        current_location.first_column = yycolumn; \
+        current_location.last_column = yycolumn + yyleng - 1; \
+        yycolumn += yyleng; \
+    }
 %}
 
 %%
 
-\n                          { yylineno++; }
-[ \t\r]+                    { /* skip whitespace */ }
+\n                          { yylineno++; yycolumn = 1; }
+[ \t\r]+                    { /* skip whitespace, but update column */ }
 
 [0-9]+(\.[0-9]+)?           {
                               yylval.expr = new NumberExpr(atof(yytext));
@@ -49,6 +64,11 @@ extern int yylineno;
     if (strcmp(yytext, "true") == 0)     { yylval.expr = new BooleanExpr(true);  return TRUE; }
     if (strcmp(yytext, "false") == 0)    { yylval.expr = new BooleanExpr(false); return FALSE; }
     if (strcmp(yytext,"function") == 0)  return FUNCTION; 
+    if (strcmp(yytext, "type")     == 0) return TYPE;
+    if (strcmp(yytext, "inherits") == 0) return INHERITS;
+    if (strcmp(yytext, "new")      == 0) return NEW;
+    if (strcmp(yytext, "self")     == 0) { yylval.str = strdup("self"); return SELF; }
+    if (strcmp(yytext, "base")     == 0) { yylval.str = strdup("base"); return BASE; }    
 
 
     // Si no es ninguna palabra reservada, entonces es IDENT
@@ -56,7 +76,8 @@ extern int yylineno;
     return IDENT;
 }
 
-                    
+
+"\."                        { return DOT; }                    
 \,                          { return COMMA; }
 \+                          { return PLUS; }
 \-                          { return MINUS; }

@@ -241,8 +241,22 @@ member_def:
         free($2);
     }
 
-  | /* método inline */
-    FUNCTION IDENT LPAREN ident_list RPAREN ARROW expr {
+      | /* método full-form sin FUNCTION */
+    IDENT LPAREN ident_list RPAREN LBRACE stmt_list RBRACE {
+        auto args  = std::move(*$3); delete $3;
+        auto block = std::make_unique<Program>();
+        block->stmts = std::move(*$6); delete $6;
+
+        FunctionDecl* fn = new FunctionDecl(
+                               $1,
+                               std::move(args),
+                               std::move(block));
+        $$ = new MemberDef{ false, {}, StmtPtr(fn) };
+        free($1);
+    }
+
+  | /* método inline con FUNCTION*/
+    FUNCTION IDENT LPAREN ident_list RPAREN ARROW expr SEMICOLON {
         /* posiciones
             1: FUNCTION
             2: IDENT
@@ -261,6 +275,19 @@ member_def:
                                StmtPtr(body));
         $$ = new MemberDef{ false, {}, StmtPtr(fn) };
         free($2);
+    }
+
+      | /* método inline sin FUNCTION */
+    IDENT LPAREN ident_list RPAREN ARROW expr SEMICOLON {
+        auto argsVec = std::move(*$3); delete $3;
+        ExprStmt* body = new ExprStmt(ExprPtr($6));
+
+        FunctionDecl* fn = new FunctionDecl(
+                               $1,
+                               std::move(argsVec),
+                               StmtPtr(body));
+        $$ = new MemberDef{ false, {}, StmtPtr(fn) };
+        free($1);
     }
 ;
 
@@ -439,8 +466,16 @@ expr:
     | expr DOT IDENT {
         $$ = new MemberAccessExpr( ExprPtr($1), std::string($3) );
         free($3);
-    }  
-
+    }
+      | expr DOT IDENT ASSIGN_DESTRUCT expr {
+        // ATAJO: expr := MemberAssignExpr(object, member, value)
+        $$ = new MemberAssignExpr(
+                 ExprPtr($1),
+                 std::string($3),
+                 ExprPtr($5)
+             );
+        free($3);
+    }
 ;
 
 if_expr:

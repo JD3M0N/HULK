@@ -275,6 +275,7 @@ struct PrintVisitor : StmtVisitor, ExprVisitor
         expr->object->accept(this);
         indentLevel--;
     }
+    
     void visit(MemberAssignExpr *expr) override
     {
         printIndent();
@@ -282,6 +283,20 @@ struct PrintVisitor : StmtVisitor, ExprVisitor
         indentLevel++;
         expr->object->accept(this);
         expr->value->accept(this);
+        indentLevel--;
+    }
+
+    void visit(MethodCallExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ MethodCall: " << expr->methodName << "\n";
+        indentLevel++;
+        // Primero el receptor
+        expr->receiver->accept(this);
+        // Luego cada argumento
+        for (auto &arg : expr->args) {
+            arg->accept(this);
+        }
         indentLevel--;
     }
 

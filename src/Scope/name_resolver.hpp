@@ -135,49 +135,49 @@ public:
     /* 1) Declaración de clase ---------------------------------- */
     void visit(ClassDecl *c) override
     {
-        /* 1-a) declarar el nombre de la clase en el scope actual */
-        if (currentScope_->existsInCurrent(c->name))
+        auto parentScope     = currentScope_;
+        // Creamos el nuevo scope de la clase
+        auto classScopePtr   = std::make_shared<SymScope>(parentScope);
+
+        // Preparamos la info de clase
+        SymbolInfo classInfo;
+        classInfo.kind       = SymbolInfo::CLASS;
+        classInfo.classScope = classScopePtr;
+
+        // Declaramos la clase en el scope padre
+        if (parentScope->existsInCurrent(c->name))
             throw std::runtime_error("Redeclaración de clase: " + c->name);
-        currentScope_->declare(c->name, {SymbolInfo::CLASS});
+        parentScope->declare(c->name, classInfo);
 
-        /* 1-b) si hereda, verificar que el padre exista y sea CLASS */
-        if (c->parent != "Object")
-            currentScope_->lookup(c->parent); // —simple: asumimos que es CLASS—
+        // A partir de aquí, usamos classScopePtr para atributos y métodos
+        currentScope_ = classScopePtr;
 
-        /* 1-c) nuevo scope “interno” para atributos/métodos        */
-        auto outer = currentScope_;
-        auto classScope = std::make_shared<SymScope>(outer);
-
-        /* 1-d) registra atributos como VARIABLES                   */
+        /* 1-d) registra atributos como VARIABLES */
         for (auto &attr : c->attributes)
         {
-            if (classScope->existsInCurrent(attr.first))
+            if (currentScope_->existsInCurrent(attr.first))
                 throw std::runtime_error("Atributo repetido: " + attr.first);
-            classScope->declare(attr.first, {SymbolInfo::VARIABLE});
+            currentScope_->declare(attr.first, {SymbolInfo::VARIABLE});
             attr.second->accept(this); // inicializador
         }
 
-        /* 1-e) registra métodos y resuelve cuerpos                 */
+        /* 1-e) registra métodos y resuelve cuerpos */
         for (auto &mStmt : c->methods)
         {
             auto *m = dynamic_cast<FunctionDecl *>(mStmt.get());
-            if (!m)
-                continue; // paranoico
+            if (!m) continue;
 
-            if (classScope->existsInCurrent(m->name))
+            if (currentScope_->existsInCurrent(m->name))
                 throw std::runtime_error("Miembro repetido: " + m->name);
-            classScope->declare(m->name, {SymbolInfo::FUNCTION});
+            currentScope_->declare(m->name, {SymbolInfo::FUNCTION});
 
-            /* scope propio del método ---------------------------- */
-            auto save = currentScope_;
-            currentScope_ = std::make_shared<SymScope>(classScope);
+            auto saveScope = currentScope_;
+            currentScope_  = std::make_shared<SymScope>(classScopePtr);
 
-            /* insertar self (siempre) y base (si tiene padre) -----*/
             currentScope_->declare("self", {SymbolInfo::VARIABLE});
             if (c->parent != "Object")
                 currentScope_->declare("base", {SymbolInfo::VARIABLE});
 
-            /* parámetros */
             for (auto &p : m->params)
             {
                 if (currentScope_->existsInCurrent(p))
@@ -186,10 +186,11 @@ public:
             }
 
             m->body->accept(this);
-            currentScope_ = save;
+            currentScope_ = saveScope;
         }
 
-        /* no hace falta dejar classScope vivo — salimos — */
+        // Al final, restauramos el scope externo
+        currentScope_ = parentScope;
     }
 
     /* 2)  new Tipo( … )  ---------------------------------------- */
@@ -224,5 +225,22 @@ public:
         expr->object->accept(this);
         // Verifica que expr->member exista en el scope del objeto si lo deseas:
         expr->value->accept(this);
+    }
+
+    /* 6) llamadas a método: receptor.metodo(arg1, arg2…) */
+    void visit(MethodCallExpr *expr) override
+    {
+        // 1) resolver nombres dentro del receptor
+        expr->receiver->accept(this);
+
+        // 2) resolver cada argumento
+        for (auto &arg : expr->args)
+            arg->accept(this);
+
+        // 3) Verificar que el método exista en el scope de la clase:
+        //    – Primero obtener el tipo estático del receptor (pendiente de inferencia de tipos).
+        //    – Luego hacer:
+        //         auto ci = /* lookup del SymbolInfo de la clase */;
+        //         ci.classScope->lookup(expr->methodName);
     }
 };

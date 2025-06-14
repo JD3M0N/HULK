@@ -3,6 +3,7 @@
 
 #include "../Type/type.hpp" // ahora tienes sólo UNA versión de find/unify
 #include "../AST/ast.hpp"
+#include <unordered_map>
 
 // -- Constructor: entorno global vacío --
 TypeInfererVisitor::TypeInfererVisitor()
@@ -176,17 +177,45 @@ void TypeInfererVisitor::visit(Program *prog)
 
 void TypeInfererVisitor::visit(ClassDecl *decl)
 {
-    // Inferimos cada inicializador de atributo:
+    // 1) Inferir atributos como antes
     for (auto &attr : decl->attributes)
-    {
         attr.second->accept(this);
+
+    // 2) Pre-declarar tipos de métodos en classMethods_
+    for (auto &mStmt : decl->methods) {
+        if (auto *f = dynamic_cast<FunctionDecl*>(mStmt.get())) {
+            // Crear variables de tipo para parámetros y retorno
+            std::vector<TypePtr> ps;
+            for (size_t i = 0; i < f->params.size(); ++i)
+                ps.push_back(Type::makeVar());
+            auto retV = Type::makeVar();
+            auto mType = Type::makeFunction(ps, retV);
+            // Guardar en el mapa con clave "Clase"."método"
+            classMethods_[decl->name][f->name] = mType;
+        }
     }
-    // Inferimos cada método (FunctionDecl*)
-    for (auto &m : decl->methods)
-    {
-        m->accept(this);
+
+    // 3) Inferir el cuerpo de cada método y unificar su retorno
+    for (auto &mStmt : decl->methods) {
+        if (auto *f = dynamic_cast<FunctionDecl*>(mStmt.get())) {
+            // 3-a) crear nuevo scope para parámetros
+            auto parentEnv = env;
+            env = std::make_shared<Scope<TypePtr>>(parentEnv);
+            // 3-b) declarar cada parámetro con su TVAR correspondiente
+            auto &paramTypes = classMethods_[decl->name][f->name]->params;
+            for (size_t i = 0; i < f->params.size(); ++i)
+                env->declare(f->params[i], paramTypes[i]);
+            // 3-c) inferir cuerpo
+            f->body->accept(this);
+            // 3-d) unificar retorno
+            auto retV = classMethods_[decl->name][f->name]->retType;
+            if (auto *eb = dynamic_cast<ExprStmt*>(f->body.get())) {
+                unify(retV, eb->expr->inferredType);
+            }
+            // 3-e) restaurar scope
+            env = parentEnv;
+        }
     }
-    // No devolvemos nada; las declaraciones de clase no son expresiones
 }
 
 void TypeInfererVisitor::visit(NewExpr *expr)
@@ -223,4 +252,40 @@ void TypeInfererVisitor::visit(MemberAssignExpr *expr)
     // Stub: unificamos el tipo del valor con el tipo declarado del atributo,
     // o simplemente propagamos el tipo de expr->value:
     expr->inferredType = expr->value->inferredType;
+}
+
+void TypeInfererVisitor::visit(MethodCallExpr *expr)
+{
+    // 1) Inferir tipo de receptor y argumentos
+    expr->receiver->accept(this);
+    for (auto &arg : expr->args)
+        arg->accept(this);
+
+    // 2) Comprobar que sea un tipo de clase
+    auto recvT = find(expr->receiver->inferredType);
+    if (recvT->kind != TypeKind::CLASS) {
+        throw std::runtime_error("No se puede llamar método en tipo no-clase");
+    }
+
+    // 3) Buscar la firma del método en nuestro mapa
+    auto cname = recvT->name;
+    auto mit  = classMethods_.find(cname);
+    if (mit == classMethods_.end()) {
+        throw std::runtime_error("Clase no declarada: " + cname);
+    }
+    auto &mmap = mit->second;
+    auto fit  = mmap.find(expr->methodName);
+    if (fit == mmap.end()) {
+        throw std::runtime_error(
+          "Método '" + expr->methodName + "' no existe en clase " + cname);
+    }
+    auto mType = fit->second;
+
+    // 4) Unificar tipos de argumentos
+    for (size_t i = 0; i < expr->args.size(); ++i) {
+        unify(expr->args[i]->inferredType, mType->params[i]);
+    }
+
+    // 5) Resultado de la llamada → tipo de retorno
+    expr->inferredType = mType->retType;
 }

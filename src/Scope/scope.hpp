@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <stdexcept>
 
+template <typename Info>
+class Scope;
 /// Información asociada a cada símbolo en el análisis semántico
 struct SymbolInfo
 {
@@ -14,8 +16,8 @@ struct SymbolInfo
         FUNCTION,
         CLASS
     } kind;
-    // Podrías añadir tipo, puntero a AST::FunctionDecl*, etc.
-    // TypeInfo type;
+    // Para Kind::CLASS: puntero al scope interno con atributos y métodos
+    std::shared_ptr<Scope<SymbolInfo>> classScope;
 };
 
 template <typename Info>

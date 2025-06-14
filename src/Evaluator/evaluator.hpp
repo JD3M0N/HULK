@@ -840,6 +840,69 @@ struct EvaluatorVisitor : StmtVisitor, ExprVisitor
 
         lastValue = v;
     }
+
+    void visit(MethodCallExpr *expr)
+    {
+        // 1) Evaluar receptor
+        expr->receiver->accept(this);
+        Value recv = lastValue;
+        if (!recv.isObject()) {
+            throw std::runtime_error("Llamada a método en valor no-objeto");
+        }
+        auto obj = recv.asObject();
+        auto cls = obj->klass;
+
+        // 2) Buscar la declaración del método en la clase
+        FunctionDecl *method = nullptr;
+        for (auto &mStmt : cls->methods) {
+            if (auto *f = dynamic_cast<FunctionDecl *>(mStmt.get())) {
+                if (f->name == expr->methodName) {
+                    method = f;
+                    break;
+                }
+            }
+        }
+        if (!method) {
+            throw std::runtime_error(
+            "Método '" + expr->methodName + "' no encontrado en clase " + cls->name);
+        }
+
+        // 3) Evaluar argumentos
+        std::vector<Value> argVals;
+        for (auto &arg : expr->args) {
+            arg->accept(this);
+            argVals.push_back(lastValue);
+        }
+
+        // 4) Preparar nuevo entorno: un frame hijo de los fields del objeto
+        auto oldEnv    = env;
+        env            = std::make_shared<EnvFrame>(obj->fields);
+
+        // 5) Bindings especiales: self y base
+        currentSelf    = recv;
+        currentClass   = cls;
+        env->locals["self"] = currentSelf;
+        if (cls->parent != "Object") {
+            // crear un ObjectValue para base, compartiendo mismos fields
+            auto parentDecl = classes.at(cls->parent);
+            ObjectPtr baseObj = std::make_shared<ObjectValue>(parentDecl, obj->fields);
+            env->locals["base"] = baseObj;
+        }
+
+        // 6) Bindear parámetros
+        for (size_t i = 0; i < method->params.size(); ++i) {
+            env->locals[method->params[i]] = argVals[i];
+        }
+
+        // 7) Ejecutar cuerpo del método
+        method->body->accept(this);
+
+        // 8) Restaurar entorno y contexto
+        env          = oldEnv;
+        currentClass = nullptr;
+        // lastValue ya contiene el valor de retorno
+    }
+
 };
 
 #endif

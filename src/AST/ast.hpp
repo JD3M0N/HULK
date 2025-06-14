@@ -34,6 +34,7 @@ struct SelfExpr;
 struct MemberAccessExpr;
 struct MemberAssignExpr;
 struct ClassDecl;
+struct MethodCallExpr;
 
 struct ExprVisitor
 {
@@ -55,6 +56,7 @@ struct ExprVisitor
     virtual void visit(BaseExpr *expr) = 0;
     virtual void visit(MemberAccessExpr *expr) = 0;
     virtual void visit(MemberAssignExpr *expr) = 0;
+    virtual void visit(MethodCallExpr *expr) = 0;
     virtual ~ExprVisitor() = default;
 };
 
@@ -397,5 +399,23 @@ struct MemberAssignExpr : Expr
     }
     void accept(ExprVisitor *v) override { v->visit(this); }
 };
+
+// Llamada a método: receptor.nombre(args…)
+struct MethodCallExpr : Expr {
+    ExprPtr receiver;
+    std::string methodName;
+    std::vector<ExprPtr> args;
+
+    MethodCallExpr(ExprPtr recv, std::string name, std::vector<ExprPtr> arguments)
+      : receiver(std::move(recv)),
+        methodName(std::move(name)),
+        args(std::move(arguments))
+    {}
+
+    void accept(ExprVisitor *v) override {
+        v->visit(this);
+    }
+};
+
 
 #endif // AST_HPP

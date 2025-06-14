@@ -2,11 +2,13 @@
 #include "../Type/type.hpp"
 #include "../AST/ast.hpp"     // AST definitions :contentReference[oaicite:1]{index=1}
 #include "../Scope/scope.hpp" // Scope para variables y funciones :contentReference[oaicite:2]{index=2}
+#include <unordered_map>
 
 class TypeInfererVisitor : public ExprVisitor, public StmtVisitor
 {
     using TypePtr = std::shared_ptr<Type>;
     Scope<TypePtr>::Ptr env;
+    std::unordered_map<std::string, std::unordered_map<std::string,TypePtr>> classMethods_;
 
 public:
     explicit TypeInfererVisitor();
@@ -31,6 +33,7 @@ public:
     void visit(BaseExpr *expr) override;
     void visit(MemberAccessExpr *expr) override;
     void visit(MemberAssignExpr *expr) override;
+    void visit(MethodCallExpr *expr) override;
 
     // StmtVisitor
     void visit(ExprStmt *stmt) override;

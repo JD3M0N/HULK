@@ -6,7 +6,6 @@
 #include "../AST/ast.hpp"
 #include "../PrintVisitor/print_visitor.hpp"
 #include "../Value/value.hpp"
-#include "../Evaluator/evaluator.hpp"
 
 using ExprPtr = std::unique_ptr<Expr>;
 using ProgramPtr = std::unique_ptr<Program>;

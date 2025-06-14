@@ -23,6 +23,9 @@ private:
     
     std::string last_temp; // Para almacenar el resultado de la última expresión
     
+    // Nuevo: Para manejo de herencia
+    std::vector<ClassDecl*> class_registry; // Registro de todas las clases procesadas
+    
 public:
     CILGenerator();
     
@@ -43,6 +46,13 @@ public:
     void emitTypeDeclaration(const std::string& type_name, 
                            const std::vector<std::string>& attributes,
                            const std::vector<std::pair<std::string, std::string>>& methods);
+    
+    // ← NUEVO MÉTODO PARA HERENCIA
+    void emitTypeDeclarationWithInheritance(
+        const std::string& type_name,
+        const std::string& parent_name, 
+        const std::vector<std::string>& attributes,
+        const std::vector<std::pair<std::string, std::string>>& methods);
     
     // StmtVisitor
     void visit(Program* prog) override;
@@ -68,4 +78,14 @@ public:
     void visit(BaseExpr* expr) override;
     void visit(MemberAccessExpr* expr) override;
     void visit(MemberAssignExpr* expr) override;
+    
+private:
+    // Nuevos métodos auxiliares para herencia
+    ClassDecl* findParentClass(const std::string& parent_name);
+    void addAncestorAttributes(ClassDecl* parent_class, std::vector<std::string>& attr_names);
+    void addAncestorMethods(ClassDecl* parent_class, std::vector<std::pair<std::string, std::string>>& method_info);
+    void generateInheritedMethods(ClassDecl* parent_class, ClassDecl* current_class, 
+                                 const std::vector<std::pair<std::string, std::string>>& method_info, 
+                                 int& method_index);
+    void registerClass(ClassDecl* cls);
 };

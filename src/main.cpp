@@ -5,7 +5,6 @@
 #include "Scope/name_resolver.hpp"
 #include "Type/type_inferer.hpp"
 #include "PrintVisitor/print_visitor.hpp"
-#include "Evaluator/evaluator.hpp"
 #include "Value/value.hpp"
 #include "CodeGen/cil_generator.hpp"
 #include "CodeGen/cil_interpreter.hpp"
@@ -74,21 +73,7 @@ int main(int argc, char *argv[])
     PrintVisitor printer;
     rootAST->accept(&printer);
 
-    // 5) Ejecución
-    // std::cout << "\n=== Ejecucion ===\n";
-    // try
-    // {
-    //     EvaluatorVisitor evaluator;
-    //     rootAST->accept(&evaluator);
-    // }
-    // catch (const std::exception &e)
-    // {
-    //     std::cerr << "Error de ejecución: " << e.what() << "\n";
-    //     std::fclose(file);
-    //     return 4;
-    // }
-
-    // 6) Generación de código CIL
+    // 5) Generación de código CIL
     std::cout << "\n=== Generacion de Codigo CIL ===\n";
     std::string cilCode;
     try
@@ -104,7 +89,7 @@ int main(int argc, char *argv[])
         return 5;
     }
 
-    // 7) Ejecución del código CIL
+    // 6) Ejecución del código CIL
     std::cout << "\n=== Ejecucion CIL ===\n";
     try
     {

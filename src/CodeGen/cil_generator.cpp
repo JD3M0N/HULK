@@ -1,6 +1,7 @@
 #include "cil_generator.hpp"
 #include <iostream>
 #include <iomanip>
+#include <algorithm>
 
 CILGenerator::CILGenerator()
 {
@@ -91,11 +92,53 @@ void CILGenerator::emitTypeDeclaration(const std::string& type_name,
     types_section << "}\n";
 }
 
-// ============ StmtVisitor ============
+// Nuevo método para manejar herencia según especificación
+
+void CILGenerator::emitTypeDeclarationWithInheritance(
+    const std::string& type_name, 
+    const std::string& parent_name,
+    const std::vector<std::string>& attributes,
+    const std::vector<std::pair<std::string, std::string>>& methods)
+{
+    types_section << "type " << type_name;
+    
+    // AGREGAR INFORMACIÓN DE HERENCIA si no es Object
+    if (parent_name != "Object")
+    {
+        types_section << " inherits " << parent_name;
+    }
+    
+    types_section << " {\n";
+    
+    // Emitir atributos CON PREFIJO DE TIPO (según especificación)
+    for (const auto& attr : attributes)
+    {
+        types_section << "    attribute " << type_name << "_" << attr << " ;\n";
+    }
+    
+    // Emitir métodos CON PREFIJO DE TIPO
+    for (const auto& method : methods)
+    {
+        types_section << "    method " << type_name << "_" << method.first << ": " 
+                     << method.second << " ;\n";
+    }
+    
+    types_section << "}\n";
+}
 
 void CILGenerator::visit(Program* prog)
 {
-    // Primero generar todas las clases (que incluyen los tipos)
+    // NUEVO: Primero registrar todas las clases para resolver herencia
+    for (auto& stmt : prog->stmts)
+    {
+        auto* cls = dynamic_cast<ClassDecl*>(stmt.get());
+        if (cls)
+        {
+            registerClass(cls);
+        }
+    }
+    
+    // Luego generar todas las clases (que incluyen los tipos)
     for (auto& stmt : prog->stmts)
     {
         auto* cls = dynamic_cast<ClassDecl*>(stmt.get());
@@ -116,19 +159,6 @@ void CILGenerator::visit(Program* prog)
     }
     
     // Crear función entry para el código restante (según especificación del libro)
-    std::vector<StmtPtr> main_stmts;
-    for (auto& stmt : prog->stmts)
-    {
-        auto* func = dynamic_cast<FunctionDecl*>(stmt.get());
-        auto* cls = dynamic_cast<ClassDecl*>(stmt.get());
-        if (!func && !cls) // No es función ni clase
-        {
-            // No podemos hacer release() aquí porque el stmt todavía está en uso
-            // En su lugar, simplemente procesamos las expresiones directamente
-        }
-    }
-    
-    // Verificar si hay código no perteneciente a funciones o clases
     bool hasMainCode = false;
     for (auto& stmt : prog->stmts)
     {
@@ -143,7 +173,7 @@ void CILGenerator::visit(Program* prog)
     
     if (hasMainCode)
     {
-        code_section << "\nfunction entry {\n";  // ← CAMBIAR A "entry"
+        code_section << "\nfunction entry {\n";
         current_function = "entry";
         
         // Procesar statements del main
@@ -157,7 +187,7 @@ void CILGenerator::visit(Program* prog)
             }
         }
         
-        emitInstruction("RETURN 0");  // ← RETURN EXPLÍCITO
+        emitInstruction("RETURN 0");
         code_section << "}\n";
     }
 }
@@ -197,40 +227,134 @@ void CILGenerator::visit(FunctionDecl* func)
 
 void CILGenerator::visit(ClassDecl* cls)
 {
-    // 1. Generar declaración de tipo
+    // 1. Generar declaración de tipo con herencia correcta
     std::vector<std::string> attr_names;
     std::vector<std::pair<std::string, std::string>> method_info;
     
-    // Recopilar nombres de atributos
-    for (const auto& attr : cls->attributes)
+    // NUEVO: Si hay herencia, primero agregar atributos del padre
+    if (cls->parent != "Object")
     {
-        attr_names.push_back(attr.first);
+        // Buscar la clase padre en el AST del programa actual
+        ClassDecl* parent_class = findParentClass(cls->parent);
+        if (parent_class)
+        {
+            // Agregar atributos del padre EN EL MISMO ORDEN
+            for (const auto& parent_attr : parent_class->attributes)
+            {
+                attr_names.push_back(parent_attr.first);
+            }
+            
+            // Recursivamente agregar atributos de ancestros más lejanos
+            addAncestorAttributes(parent_class, attr_names);
+        }
+        else
+        {
+            // Si no se encuentra la clase padre, agregar placeholder
+            std::cerr << "Advertencia: Clase padre '" << cls->parent << "' no encontrada para '" << cls->name << "'" << std::endl;
+        }
     }
     
-    // Recopilar información de métodos
+    // Agregar atributos de la clase actual (manteniendo orden)
+    for (const auto& attr : cls->attributes)
+    {
+        // Verificar que no sea una redefinición de atributo heredado
+        if (std::find(attr_names.begin(), attr_names.end(), attr.first) == attr_names.end())
+        {
+            attr_names.push_back(attr.first);
+        }
+        else
+        {
+            std::cerr << "Advertencia: Atributo '" << attr.first << "' redefinido en clase '" << cls->name << "'" << std::endl;
+        }
+    }
+    
+    // NUEVO: Si hay herencia, primero agregar métodos del padre
+    if (cls->parent != "Object")
+    {
+        ClassDecl* parent_class = findParentClass(cls->parent);
+        if (parent_class)
+        {
+            // Agregar métodos del padre (pueden ser sobrescritos)
+            for (const auto& parent_method : parent_class->methods)
+            {
+                auto* parent_func = dynamic_cast<FunctionDecl*>(parent_method.get());
+                if (parent_func)
+                {
+                    std::string function_label = newFunctionLabel();
+                    method_info.push_back({parent_func->name, function_label});
+                }
+            }
+            
+            // Recursivamente agregar métodos de ancestros
+            addAncestorMethods(parent_class, method_info);
+        }
+    }
+    
+    // Agregar métodos de la clase actual (pueden sobrescribir los heredados)
     for (const auto& method : cls->methods)
     {
         auto* func = dynamic_cast<FunctionDecl*>(method.get());
         if (func)
         {
-            std::string function_label = newFunctionLabel();
-            method_info.push_back({func->name, function_label});
+            // Buscar si este método sobrescribe uno heredado
+            bool is_override = false;
+            for (auto& existing_method : method_info)
+            {
+                if (existing_method.first == func->name)
+                {
+                    // Sobrescribir el método heredado con nueva etiqueta
+                    existing_method.second = newFunctionLabel();
+                    is_override = true;
+                    break;
+                }
+            }
+            
+            // Si no es sobrescritura, agregar como nuevo método
+            if (!is_override)
+            {
+                std::string function_label = newFunctionLabel();
+                method_info.push_back({func->name, function_label});
+            }
         }
     }
     
-    // Emitir declaración de tipo
-    emitTypeDeclaration(cls->name, attr_names, method_info);
+    // Emitir declaración de tipo CON INFORMACIÓN DE HERENCIA
+    emitTypeDeclarationWithInheritance(cls->name, cls->parent, attr_names, method_info);
     
     // 2. Generar métodos como funciones separadas
     int method_index = 0;
+    
+    // Primero generar métodos heredados (si no son sobrescritos)
+    if (cls->parent != "Object")
+    {
+        ClassDecl* parent_class = findParentClass(cls->parent);
+        if (parent_class)
+        {
+            generateInheritedMethods(parent_class, cls, method_info, method_index);
+        }
+    }
+    
+    // Luego generar métodos de la clase actual
     for (auto& method : cls->methods)
     {
         auto* func = dynamic_cast<FunctionDecl*>(method.get());
         if (func)
         {
-            // Crear función con prefijo de clase y usar la etiqueta generada
-            std::string old_name = func->name;
-            std::string method_label = method_info[method_index].second;
+            // Encontrar la etiqueta correspondiente en method_info
+            std::string method_label;
+            for (const auto& info : method_info)
+            {
+                if (info.first == func->name)
+                {
+                    method_label = info.second;
+                    break;
+                }
+            }
+            
+            if (method_label.empty())
+            {
+                method_label = newFunctionLabel();
+            }
             
             code_section << "\nfunction " << method_label << " {\n";
             current_function = method_label;
@@ -258,8 +382,6 @@ void CILGenerator::visit(ClassDecl* cls)
             }
             
             code_section << "}\n";
-            
-            method_index++;
         }
     }
 }
@@ -507,4 +629,161 @@ void CILGenerator::visit(ExprBlock* expr)
     }
     // El resultado del bloque es el resultado de la última expresión
     // que ya está almacenado en last_temp
+}
+
+// Implementaciones de métodos auxiliares para herencia
+
+ClassDecl* CILGenerator::findParentClass(const std::string& parent_name)
+{
+    for (auto* cls : class_registry)
+    {
+        if (cls && cls->name == parent_name)
+        {
+            return cls;
+        }
+    }
+    return nullptr;
+}
+
+void CILGenerator::addAncestorAttributes(ClassDecl* parent_class, std::vector<std::string>& attr_names)
+{
+    if (!parent_class || parent_class->parent == "Object")
+        return;
+    
+    // Buscar el abuelo
+    ClassDecl* grandparent = findParentClass(parent_class->parent);
+    if (grandparent)
+    {
+        // Primero agregar atributos del abuelo (orden bottom-up)
+        addAncestorAttributes(grandparent, attr_names);
+        
+        // Luego agregar atributos del abuelo
+        for (const auto& ancestor_attr : grandparent->attributes)
+        {
+            if (std::find(attr_names.begin(), attr_names.end(), ancestor_attr.first) == attr_names.end())
+            {
+                // Insertar al principio para mantener orden de herencia
+                attr_names.insert(attr_names.begin(), ancestor_attr.first);
+            }
+        }
+    }
+}
+
+void CILGenerator::addAncestorMethods(ClassDecl* parent_class, std::vector<std::pair<std::string, std::string>>& method_info)
+{
+    if (!parent_class || parent_class->parent == "Object")
+        return;
+    
+    // Buscar el abuelo
+    ClassDecl* grandparent = findParentClass(parent_class->parent);
+    if (grandparent)
+    {
+        // Primero agregar métodos del abuelo (orden bottom-up)
+        addAncestorMethods(grandparent, method_info);
+        
+        // Luego agregar métodos del abuelo
+        for (const auto& ancestor_method : grandparent->methods)
+        {
+            auto* ancestor_func = dynamic_cast<FunctionDecl*>(ancestor_method.get());
+            if (ancestor_func)
+            {
+                // Verificar si ya existe (no agregar duplicados)
+                bool exists = false;
+                for (const auto& existing : method_info)
+                {
+                    if (existing.first == ancestor_func->name)
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+                
+                if (!exists)
+                {
+                    std::string function_label = newFunctionLabel();
+                    // Insertar al principio para mantener orden de herencia
+                    method_info.insert(method_info.begin(), {ancestor_func->name, function_label});
+                }
+            }
+        }
+    }
+}
+
+void CILGenerator::generateInheritedMethods(ClassDecl* parent_class, ClassDecl* current_class,
+                                          const std::vector<std::pair<std::string, std::string>>& method_info,
+                                          int& method_index)
+{
+    if (!parent_class)
+        return;
+    
+    // Generar métodos del padre que NO han sido sobrescritos
+    for (auto& parent_method : parent_class->methods)
+    {
+        auto* parent_func = dynamic_cast<FunctionDecl*>(parent_method.get());
+        if (!parent_func)
+            continue;
+        
+        // Verificar si este método fue sobrescrito en la clase actual
+        bool is_overridden = false;
+        for (auto& current_method : current_class->methods)
+        {
+            auto* current_func = dynamic_cast<FunctionDecl*>(current_method.get());
+            if (current_func && current_func->name == parent_func->name)
+            {
+                is_overridden = true;
+                break;
+            }
+        }
+        
+        // Si no fue sobrescrito, generar el método heredado
+        if (!is_overridden)
+        {
+            // Encontrar la etiqueta correspondiente
+            std::string method_label;
+            for (const auto& info : method_info)
+            {
+                if (info.first == parent_func->name)
+                {
+                    method_label = info.second;
+                    break;
+                }
+            }
+            
+            if (!method_label.empty())
+            {
+                code_section << "\nfunction " << method_label << " {\n";
+                current_function = method_label;
+                
+                // Agregar 'self' como primer parámetro
+                code_section << "    PARAM self;\n";
+                
+                // Agregar parámetros del método
+                for (const auto& param : parent_func->params)
+                {
+                    code_section << "    ARG " << param << ";\n";
+                }
+                
+                // Generar código del cuerpo del método padre
+                parent_func->body->accept(this);
+                
+                // Return
+                if (!last_temp.empty())
+                {
+                    emitInstruction("RETURN " + last_temp);
+                }
+                else
+                {
+                    emitInstruction("RETURN self");
+                }
+                
+                code_section << "}\n";
+                method_index++;
+            }
+        }
+    }
+}
+
+void CILGenerator::registerClass(ClassDecl* cls)
+{
+    class_registry.push_back(cls);
 }

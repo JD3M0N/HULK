@@ -1,21 +1,27 @@
-type Point {
-    x = 0;
-    y = 0;
-    
-    init(px, py) {
-        self.x := px;
-        self.y := py;
-    }
-    
-    distance() => sqrt(self.x * self.x + self.y * self.y);
-    
-    toString() => "(" @ str(self.x) @ ", " @ str(self.y) @ ")";
-}
 
-let p1 = new Point(3, 4) in
-let p2 = new Point(0, 0) in {
-    print(p1.toString());    
-    print(p1.distance());   
-    print(p2.toString());   
-    print(p2.distance());   
+
+function factorial_iterative(n) => {
+    let result = 1 in
+    let i = 1 in {
+        while (i <= n) {
+            result := result * i;
+            i := i + 1;
+        };
+        result;
+    };
 };
+
+function sum_range(start, end) => {
+    let sum = 0 in
+    let current = start in {
+        while (current <= end) {
+            sum := sum + current;
+            current := current + 1;
+        };
+        sum;
+    };
+};
+
+print(factorial_iterative(5));
+print(sum_range(1, 10));
+print("hola");

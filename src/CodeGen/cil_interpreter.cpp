@@ -89,22 +89,15 @@ void CILInterpreter::parseDataSection(const std::string& line)
 
 void CILInterpreter::parseTypesSection(const std::string& line)
 {
-    // Parsear declaraciones de tipos según especificación del libro
-    // Ejemplos:
-    // type Main {
-    //     attribute Main_msg ;
-    //     method Main_main: f1 ;
-    // }
-    
     static std::regex type_regex("type\\s+(\\w+)\\s*\\{");
     static std::regex attr_regex("\\s*attribute\\s+(\\w+)\\s*;");
     static std::regex method_regex("\\s*method\\s+(\\w+):\\s*(\\w+)\\s*;");
-    static std::regex inherits_regex("type\\s+(\\w+)\\s*inherits\\s+(\\w+)\\s*\\{");
+    static std::regex inherits_regex("type\\s+(\\w+)\\s*inherits\\s+(\\w+)\\s*\\{");  // ← YA IMPLEMENTADO
     static std::regex close_brace_regex("\\s*\\}\\s*");
     
     std::smatch match;
     
-    // 1. Detectar inicio de declaración de tipo con herencia
+    // 1. Detectar herencia (ya implementado correctamente)
     if (std::regex_match(line, match, inherits_regex))
     {
         std::string type_name = match[1].str();
@@ -113,6 +106,18 @@ void CILInterpreter::parseTypesSection(const std::string& line)
         current_parsing_type = type_name;
         type_table[type_name] = CILTypeInfo(type_name);
         type_table[type_name].parent = parent_name;
+        
+        // NUEVO: Heredar atributos y métodos del padre
+        if (typeExists(parent_name))
+        {
+            const auto& parent_info = getTypeInfo(parent_name);
+            
+            // Copiar atributos del padre (manteniendo orden)
+            type_table[type_name].attributes = parent_info.attributes;
+            
+            // Copiar métodos del padre (pueden ser sobrescritos)
+            type_table[type_name].methods = parent_info.methods;
+        }
         
         std::cout << "Registrando tipo: " << type_name << " (hereda de " << parent_name << ")" << std::endl;
         return;

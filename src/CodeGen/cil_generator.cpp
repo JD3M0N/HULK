@@ -4,7 +4,8 @@
 
 CILGenerator::CILGenerator()
 {
-    // Inicializar secciones
+    // Inicializar secciones en el orden correcto
+    types_section << ".TYPES\n";  // ← NUEVA SECCIÓN PRIMERO
     data_section << ".DATA\n";
     code_section << ".CODE\n";
 }
@@ -14,8 +15,9 @@ std::string CILGenerator::generateCode(Program* program)
     // Generar código para el programa
     program->accept(this);
     
-    // Construir el resultado final
+    // Construir el resultado final CON SECCIÓN DE TIPOS
     std::ostringstream result;
+    result << types_section.str() << "\n";  // ← TIPOS PRIMERO
     result << data_section.str() << "\n";
     result << code_section.str();
     
@@ -30,6 +32,11 @@ std::string CILGenerator::newTemp()
 std::string CILGenerator::newLabel()
 {
     return "L" + std::to_string(label_counter++);
+}
+
+std::string CILGenerator::newFunctionLabel()
+{
+    return "f" + std::to_string(function_counter++);
 }
 
 std::string CILGenerator::getStringLabel(const std::string& str)
@@ -62,12 +69,43 @@ void CILGenerator::emitBinaryOp(const std::string& dest, const std::string& left
     emitInstruction(dest + " = " + left + " " + op + " " + right);
 }
 
+void CILGenerator::emitTypeDeclaration(const std::string& type_name, 
+                                     const std::vector<std::string>& attributes,
+                                     const std::vector<std::pair<std::string, std::string>>& methods)
+{
+    types_section << "type " << type_name << " {\n";
+    
+    // Emitir atributos
+    for (const auto& attr : attributes)
+    {
+        types_section << "    attribute " << type_name << "_" << attr << " ;\n";
+    }
+    
+    // Emitir métodos
+    for (const auto& method : methods)
+    {
+        types_section << "    method " << type_name << "_" << method.first << ": " 
+                     << method.second << " ;\n";
+    }
+    
+    types_section << "}\n";
+}
+
 // ============ StmtVisitor ============
 
 void CILGenerator::visit(Program* prog)
 {
+    // Primero generar todas las clases (que incluyen los tipos)
+    for (auto& stmt : prog->stmts)
+    {
+        auto* cls = dynamic_cast<ClassDecl*>(stmt.get());
+        if (cls)
+        {
+            cls->accept(this);
+        }
+    }
     
-    // Primero generar todas las funciones
+    // Luego generar todas las funciones
     for (auto& stmt : prog->stmts)
     {
         auto* func = dynamic_cast<FunctionDecl*>(stmt.get());
@@ -77,28 +115,49 @@ void CILGenerator::visit(Program* prog)
         }
     }
     
-    // Crear función main para el código restante
+    // Crear función entry para el código restante (según especificación del libro)
     std::vector<StmtPtr> main_stmts;
     for (auto& stmt : prog->stmts)
     {
         auto* func = dynamic_cast<FunctionDecl*>(stmt.get());
-        if (!func) // No es función
+        auto* cls = dynamic_cast<ClassDecl*>(stmt.get());
+        if (!func && !cls) // No es función ni clase
         {
-            main_stmts.push_back(std::unique_ptr<Stmt>(stmt.release()));
+            // No podemos hacer release() aquí porque el stmt todavía está en uso
+            // En su lugar, simplemente procesamos las expresiones directamente
         }
     }
     
-    if (!main_stmts.empty())
+    // Verificar si hay código no perteneciente a funciones o clases
+    bool hasMainCode = false;
+    for (auto& stmt : prog->stmts)
     {
-        code_section << "\nfunction main {\n";
-        current_function = "main";
+        auto* func = dynamic_cast<FunctionDecl*>(stmt.get());
+        auto* cls = dynamic_cast<ClassDecl*>(stmt.get());
+        if (!func && !cls)
+        {
+            hasMainCode = true;
+            break;
+        }
+    }
+    
+    if (hasMainCode)
+    {
+        code_section << "\nfunction entry {\n";  // ← CAMBIAR A "entry"
+        current_function = "entry";
         
         // Procesar statements del main
-        for (auto& stmt : main_stmts)
+        for (auto& stmt : prog->stmts)
         {
-            stmt->accept(this);
+            auto* func = dynamic_cast<FunctionDecl*>(stmt.get());
+            auto* cls = dynamic_cast<ClassDecl*>(stmt.get());
+            if (!func && !cls)
+            {
+                stmt->accept(this);
+            }
         }
         
+        emitInstruction("RETURN 0");  // ← RETURN EXPLÍCITO
         code_section << "}\n";
     }
 }
@@ -138,24 +197,75 @@ void CILGenerator::visit(FunctionDecl* func)
 
 void CILGenerator::visit(ClassDecl* cls)
 {
-    // Para clases, generaremos métodos como funciones separadas
-    // y mantendremos información sobre atributos
+    // 1. Generar declaración de tipo
+    std::vector<std::string> attr_names;
+    std::vector<std::pair<std::string, std::string>> method_info;
     
+    // Recopilar nombres de atributos
+    for (const auto& attr : cls->attributes)
+    {
+        attr_names.push_back(attr.first);
+    }
+    
+    // Recopilar información de métodos
+    for (const auto& method : cls->methods)
+    {
+        auto* func = dynamic_cast<FunctionDecl*>(method.get());
+        if (func)
+        {
+            std::string function_label = newFunctionLabel();
+            method_info.push_back({func->name, function_label});
+        }
+    }
+    
+    // Emitir declaración de tipo
+    emitTypeDeclaration(cls->name, attr_names, method_info);
+    
+    // 2. Generar métodos como funciones separadas
+    int method_index = 0;
     for (auto& method : cls->methods)
     {
         auto* func = dynamic_cast<FunctionDecl*>(method.get());
         if (func)
         {
-            // Prefijo del método con el nombre de la clase
+            // Crear función con prefijo de clase y usar la etiqueta generada
             std::string old_name = func->name;
-            func->name = cls->name + "_" + func->name;
-            func->accept(this);
-            func->name = old_name; // Restaurar nombre original
+            std::string method_label = method_info[method_index].second;
+            
+            code_section << "\nfunction " << method_label << " {\n";
+            current_function = method_label;
+            
+            // Agregar 'self' como primer parámetro
+            code_section << "    PARAM self;\n";
+            
+            // Agregar parámetros del método
+            for (const auto& param : func->params)
+            {
+                code_section << "    ARG " << param << ";\n";
+            }
+            
+            // Generar código del cuerpo
+            func->body->accept(this);
+            
+            // Return
+            if (!last_temp.empty())
+            {
+                emitInstruction("RETURN " + last_temp);
+            }
+            else
+            {
+                emitInstruction("RETURN self");  // Retornar self por defecto
+            }
+            
+            code_section << "}\n";
+            
+            method_index++;
         }
     }
 }
 
 // ============ ExprVisitor ============
+// (El resto de métodos se mantienen igual)
 
 void CILGenerator::visit(NumberExpr* expr)
 {
@@ -214,7 +324,7 @@ void CILGenerator::visit(BinaryExpr* expr)
     case BinaryExpr::OP_NEQ: op = "!="; break;
     case BinaryExpr::OP_AND: op = "&&"; break;
     case BinaryExpr::OP_OR:  op = "||"; break;
-    case BinaryExpr::OP_CONCAT: op = "@"; break; // Asumiendo @ para concatenación
+    case BinaryExpr::OP_CONCAT: op = "@"; break;
     }
     
     emitBinaryOp(last_temp, left, op, right);
@@ -249,16 +359,24 @@ void CILGenerator::visit(VariableExpr* expr)
 
 void CILGenerator::visit(LetExpr* expr)
 {
-    // Evaluar inicializador
+    // Generar código según la plantilla del libro:
+    // <init.code>
+    // <var> = <init.value> ;
+    // <body.code>
+    // <value> = <body.value> ;
+    
+    // 1. Generar código del inicializador
     expr->initializer->accept(this);
     std::string init_value = last_temp;
     
-    // Asignar a la variable
+    // 2. Asignar a la variable local
     emitAssignment(expr->name, init_value);
     
-    // Evaluar cuerpo
+    // 3. Generar código del cuerpo
     expr->body->accept(this);
-    // El resultado del let es el resultado del cuerpo
+    
+    // 4. El resultado del let es el resultado del cuerpo (ya está en last_temp)
+    // No necesitamos hacer nada más porque last_temp ya contiene el valor correcto
 }
 
 void CILGenerator::visit(AssignExpr* expr)
@@ -332,18 +450,20 @@ void CILGenerator::visit(NewExpr* expr)
     
     last_temp = newTemp();
     
-    // Crear nueva instancia
+    // Crear nueva instancia según especificación
     emitInstruction(last_temp + " = ALLOCATE " + expr->typeName);
     
-    // Llamar al constructor si hay argumentos
+    // Inicializar atributos con valores por defecto si hay argumentos
     if (!args.empty())
     {
-        std::string ctor_call = "CALL " + expr->typeName + "_init " + last_temp;
+        // Llamar al constructor usando VCALL
         for (const auto& arg : args)
         {
-            ctor_call += " " + arg;
+            emitInstruction("PARAM " + arg);
         }
-        emitInstruction(ctor_call);
+        emitInstruction("PARAM " + last_temp);  // self como primer parámetro
+        std::string result_temp = newTemp();
+        emitInstruction(result_temp + " = VCALL " + expr->typeName + " init");
     }
 }
 

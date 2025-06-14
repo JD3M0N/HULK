@@ -1,4 +1,21 @@
-function factorial(n) => 
-    if (n <= 1) 1 else n * factorial(n - 1);
+type Point {
+    x = 0;
+    y = 0;
+    
+    init(px, py) {
+        self.x := px;
+        self.y := py;
+    }
+    
+    distance() => sqrt(self.x * self.x + self.y * self.y);
+    
+    toString() => "(" @ str(self.x) @ ", " @ str(self.y) @ ")";
+}
 
-let x = 5 in print(factorial(x));
+let p1 = new Point(3, 4) in
+let p2 = new Point(0, 0) in {
+    print(p1.toString());    
+    print(p1.distance());   
+    print(p2.toString());   
+    print(p2.distance());   
+};

@@ -8,6 +8,7 @@
 class CILGenerator : public StmtVisitor, public ExprVisitor
 {
 private:
+    std::ostringstream types_section;  // ← NUEVA SECCIÓN
     std::ostringstream data_section;
     std::ostringstream code_section;
     std::vector<std::string> string_constants;
@@ -15,6 +16,7 @@ private:
     
     int temp_counter = 0;
     int label_counter = 0;
+    int function_counter = 0;  // ← CONTADOR DE FUNCIONES
     std::string current_function;
     std::vector<std::string> function_locals;
     std::vector<std::string> function_args;
@@ -30,11 +32,17 @@ public:
     // Métodos auxiliares
     std::string newTemp();
     std::string newLabel();
+    std::string newFunctionLabel();  // ← NUEVO MÉTODO
     std::string getStringLabel(const std::string& str);
     void emitInstruction(const std::string& instruction);
     void emitAssignment(const std::string& dest, const std::string& source);
     void emitBinaryOp(const std::string& dest, const std::string& left, 
                      const std::string& op, const std::string& right);
+    
+    // Nuevos métodos para manejo de tipos
+    void emitTypeDeclaration(const std::string& type_name, 
+                           const std::vector<std::string>& attributes,
+                           const std::vector<std::pair<std::string, std::string>>& methods);
     
     // StmtVisitor
     void visit(Program* prog) override;

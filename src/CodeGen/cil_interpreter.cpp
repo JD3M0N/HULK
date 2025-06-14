@@ -16,6 +16,7 @@ void CILInterpreter::loadProgram(const std::string& cil_code)
 {
     std::istringstream stream(cil_code);
     std::string line;
+    bool in_types = false;  // ← NUEVA BANDERA
     bool in_data = false;
     bool in_code = false;
     std::string current_section;
@@ -30,20 +31,33 @@ void CILInterpreter::loadProgram(const std::string& cil_code)
         if (line.empty() || line[0] == '#')
             continue;
         
-        if (line == ".DATA")
+        if (line == ".TYPES")  // ← MANEJAR NUEVA SECCIÓN
         {
+            in_types = true;
+            in_data = false;
+            in_code = false;
+            continue;
+        }
+        else if (line == ".DATA")
+        {
+            in_types = false;
             in_data = true;
             in_code = false;
             continue;
         }
         else if (line == ".CODE")
         {
+            in_types = false;
             in_data = false;
             in_code = true;
             continue;
         }
         
-        if (in_data)
+        if (in_types)
+        {
+            parseTypesSection(line);  // ← NUEVO MÉTODO
+        }
+        else if (in_data)
         {
             parseDataSection(line);
         }
@@ -71,6 +85,98 @@ void CILInterpreter::parseDataSection(const std::string& line)
         std::string value = match[2].str();
         string_constants[label] = value;
     }
+}
+
+void CILInterpreter::parseTypesSection(const std::string& line)
+{
+    // Parsear declaraciones de tipos según especificación del libro
+    // Ejemplos:
+    // type Main {
+    //     attribute Main_msg ;
+    //     method Main_main: f1 ;
+    // }
+    
+    static std::regex type_regex("type\\s+(\\w+)\\s*\\{");
+    static std::regex attr_regex("\\s*attribute\\s+(\\w+)\\s*;");
+    static std::regex method_regex("\\s*method\\s+(\\w+):\\s*(\\w+)\\s*;");
+    static std::regex inherits_regex("type\\s+(\\w+)\\s*inherits\\s+(\\w+)\\s*\\{");
+    static std::regex close_brace_regex("\\s*\\}\\s*");
+    
+    std::smatch match;
+    
+    // 1. Detectar inicio de declaración de tipo con herencia
+    if (std::regex_match(line, match, inherits_regex))
+    {
+        std::string type_name = match[1].str();
+        std::string parent_name = match[2].str();
+        
+        current_parsing_type = type_name;
+        type_table[type_name] = CILTypeInfo(type_name);
+        type_table[type_name].parent = parent_name;
+        
+        std::cout << "Registrando tipo: " << type_name << " (hereda de " << parent_name << ")" << std::endl;
+        return;
+    }
+    
+    // 2. Detectar inicio de declaración de tipo simple
+    if (std::regex_match(line, match, type_regex))
+    {
+        std::string type_name = match[1].str();
+        current_parsing_type = type_name;
+        type_table[type_name] = CILTypeInfo(type_name);
+        
+        std::cout << "Registrando tipo: " << type_name << std::endl;
+        return;
+    }
+    
+    // 3. Detectar fin de declaración de tipo
+    if (std::regex_match(line, close_brace_regex))
+    {
+        if (!current_parsing_type.empty())
+        {
+            std::cout << "Finalizando tipo: " << current_parsing_type << std::endl;
+            current_parsing_type.clear();
+        }
+        return;
+    }
+    
+    // Si estamos dentro de una declaración de tipo, procesar atributos y métodos
+    if (!current_parsing_type.empty())
+    {
+        // 4. Detectar atributos
+        if (std::regex_match(line, match, attr_regex))
+        {
+            std::string full_attr_name = match[1].str();
+            type_table[current_parsing_type].attributes.push_back(full_attr_name);
+            
+            std::cout << "  - Atributo: " << full_attr_name << std::endl;
+            return;
+        }
+        
+        // 5. Detectar métodos
+        if (std::regex_match(line, match, method_regex))
+        {
+            std::string full_method_name = match[1].str();
+            std::string function_label = match[2].str();
+            
+            // Extraer el nombre del método sin el prefijo del tipo
+            std::string method_name = full_method_name;
+            std::string type_prefix = current_parsing_type + "_";
+            if (full_method_name.find(type_prefix) == 0)
+            {
+                method_name = full_method_name.substr(type_prefix.length());
+            }
+            
+            type_table[current_parsing_type].methods[method_name] = function_label;
+            
+            std::cout << "  - Método: " << method_name << " -> " << function_label 
+                     << " (nombre completo: " << full_method_name << ")" << std::endl;
+            return;
+        }
+    }
+    
+    // Si llegamos aquí, la línea no coincide con ningún patrón conocido
+    // Esto es normal para líneas vacías o comentarios dentro de las declaraciones de tipo
 }
 
 void CILInterpreter::parseCodeSection(const std::string& section)
@@ -144,6 +250,8 @@ void CILInterpreter::parseCodeSection(const std::string& section)
     }
 }
 
+// Actualizar parseInstruction para manejar mejor las instrucciones según especificación
+
 CILInstruction CILInterpreter::parseInstruction(const std::string& line)
 {
     CILInstruction instr;
@@ -162,10 +270,13 @@ CILInstruction CILInterpreter::parseInstruction(const std::string& line)
     }
     
     // Detectar RETURN
-    if (clean_line.find("RETURN ") == 0)
+    if (clean_line.find("RETURN") == 0)
     {
         instr.type = CILInstruction::RETURN;
-        instr.args.push_back(clean_line.substr(7));
+        if (clean_line.length() > 6 && clean_line[6] == ' ')
+        {
+            instr.args.push_back(clean_line.substr(7));
+        }
         return instr;
     }
     
@@ -177,16 +288,42 @@ CILInstruction CILInterpreter::parseInstruction(const std::string& line)
         return instr;
     }
     
-    // Detectar IF GOTO - corregir regex para manejar números decimales
-    std::regex if_goto_regex("IF\\s+(\\w+)\\s+(==|!=)\\s+([\\w\\.]+)\\s+GOTO\\s+(\\w+)");
+    // Detectar PARAM
+    if (clean_line.find("PARAM ") == 0)
+    {
+        instr.type = CILInstruction::PARAM;
+        instr.args.push_back(clean_line.substr(6));
+        return instr;
+    }
+    
+    // Detectar PRINT (sin asignación)
+    if (clean_line.find("PRINT ") == 0)
+    {
+        instr.type = CILInstruction::PRINT;
+        instr.args.push_back(clean_line.substr(6));
+        return instr;
+    }
+    
+    // Detectar IF GOTO - MEJORADO PARA MANEJAR COMPARACIONES
+    std::regex if_goto_regex("IF\\s+([\\w\\.]+)\\s+(==|!=|<|>|<=|>=)\\s+([\\w\\.\\-]+)\\s+GOTO\\s+(\\w+)");
     std::smatch match;
     if (std::regex_match(clean_line, match, if_goto_regex))
     {
         instr.type = CILInstruction::IF_GOTO;
-        instr.args.push_back(match[1].str()); // variable
+        instr.args.push_back(match[1].str()); // variable izquierda
         instr.op = match[2].str();           // operador de comparación
-        instr.args.push_back(match[3].str()); // valor de comparación
+        instr.args.push_back(match[3].str()); // variable/valor derecha
         instr.label = match[4].str();         // etiqueta
+        return instr;
+    }
+    
+    // Fallback: detectar IF GOTO simple (solo condición)
+    std::regex if_goto_simple("IF\\s+(\\w+)\\s+GOTO\\s+(\\w+)");
+    if (std::regex_match(clean_line, match, if_goto_simple))
+    {
+        instr.type = CILInstruction::IF_GOTO;
+        instr.args.push_back(match[1].str());
+        instr.label = match[2].str();
         return instr;
     }
     
@@ -197,7 +334,22 @@ CILInstruction CILInterpreter::parseInstruction(const std::string& line)
         instr.dest = clean_line.substr(0, eq_pos);
         std::string rhs = clean_line.substr(eq_pos + 3);
         
-        // CALL
+        // READ
+        if (rhs == "READ")
+        {
+            instr.type = CILInstruction::read_INSTR;
+            return instr;
+        }
+        
+        // LOAD - MEJORADO
+        if (rhs.find("LOAD ") == 0)
+        {
+            instr.type = CILInstruction::LOAD;
+            instr.args.push_back(rhs.substr(5));
+            return instr;
+        }
+        
+        // CALL - MEJORADO para manejar múltiples argumentos
         if (rhs.find("CALL ") == 0)
         {
             instr.type = CILInstruction::CALL;
@@ -210,11 +362,11 @@ CILInstruction CILInterpreter::parseInstruction(const std::string& line)
             return instr;
         }
         
-        // GETATTR
-        if (rhs.find("GETATTR ") == 0)
+        // VCALL - NUEVO
+        if (rhs.find("VCALL ") == 0)
         {
-            instr.type = CILInstruction::GETATTR;
-            std::istringstream iss(rhs.substr(8));
+            instr.type = CILInstruction::VCALL;
+            std::istringstream iss(rhs.substr(6));
             std::string token;
             while (iss >> token)
             {
@@ -231,14 +383,94 @@ CILInstruction CILInterpreter::parseInstruction(const std::string& line)
             return instr;
         }
         
-        // Operación binaria - mejorar regex para números decimales
-        std::regex binop_regex("([\\w\\.]+)\\s+([+\\-*/%%\\^<>&|=!]+)\\s+([\\w\\.]+)");
+        // ARRAY
+        if (rhs.find("ARRAY ") == 0)
+        {
+            instr.type = CILInstruction::ARRAY;
+            instr.args.push_back(rhs.substr(6));
+            return instr;
+        }
+        
+        // TYPEOF
+        if (rhs.find("TYPEOF ") == 0)
+        {
+            instr.type = CILInstruction::TYPEOF;
+            instr.args.push_back(rhs.substr(7));
+            return instr;
+        }
+        
+        // LENGTH, CONCAT, SUBSTRING, STR (según especificación)
+        if (rhs.find("LENGTH ") == 0)
+        {
+            instr.type = CILInstruction::LENGTH;
+            instr.args.push_back(rhs.substr(7));
+            return instr;
+        }
+        
+        if (rhs.find("CONCAT ") == 0)
+        {
+            instr.type = CILInstruction::CONCAT;
+            std::istringstream iss(rhs.substr(7));
+            std::string token;
+            while (iss >> token)
+            {
+                instr.args.push_back(token);
+            }
+            return instr;
+        }
+        
+        if (rhs.find("SUBSTRING ") == 0)
+        {
+            instr.type = CILInstruction::SUBSTRING;
+            std::istringstream iss(rhs.substr(10));
+            std::string token;
+            while (iss >> token)
+            {
+                instr.args.push_back(token);
+            }
+            return instr;
+        }
+        
+        if (rhs.find("STR ") == 0)
+        {
+            instr.type = CILInstruction::STR;
+            instr.args.push_back(rhs.substr(4));
+            return instr;
+        }
+        
+        // GETINDEX y GETATTR
+        if (rhs.find("GETINDEX ") == 0)
+        {
+            instr.type = CILInstruction::GETINDEX;
+            std::istringstream iss(rhs.substr(9));
+            std::string token;
+            while (iss >> token)
+            {
+                instr.args.push_back(token);
+            }
+            return instr;
+        }
+        
+        if (rhs.find("GETATTR ") == 0)
+        {
+            instr.type = CILInstruction::GETATTR;
+            std::istringstream iss(rhs.substr(8));
+            std::string token;
+            while (iss >> token)
+            {
+                instr.args.push_back(token);
+            }
+            return instr;
+        }
+        
+        // Operación binaria - MEJORADO
+        std::regex binop_regex("([\\w\\.\\-]+)\\s+([+\\-*/%%\\^<>&|=!]+)\\s+([\\w\\.\\-]+)");
         if (std::regex_match(rhs, match, binop_regex))
         {
             instr.type = CILInstruction::BINARY_OP;
-            instr.args.push_back(match[1].str()); // operando izquierdo
-            instr.op = match[2].str();            // operador
-            instr.args.push_back(match[3].str()); // operando derecho
+            instr.args.push_back(match[1].str());
+            instr.op = match[2].str();
+            instr.args.push_back(match[3].str());
             return instr;
         }
         
@@ -261,6 +493,19 @@ CILInstruction CILInterpreter::parseInstruction(const std::string& line)
         return instr;
     }
     
+    // SETINDEX
+    if (clean_line.find("SETINDEX ") == 0)
+    {
+        instr.type = CILInstruction::SETINDEX;
+        std::istringstream iss(clean_line.substr(9));
+        std::string token;
+        while (iss >> token)
+        {
+            instr.args.push_back(token);
+        }
+        return instr;
+    }
+    
     // Por defecto, asignación
     instr.type = CILInstruction::ASSIGNMENT;
     return instr;
@@ -268,15 +513,20 @@ CILInstruction CILInterpreter::parseInstruction(const std::string& line)
 
 void CILInterpreter::execute()
 {
-    // Buscar función main o la primera función como punto de entrada
-    std::string entry_point = "main";
-    if (functions.find(entry_point) == functions.end() && !functions.empty())
+    // Buscar función entry primero, luego main, o la primera función
+    std::string entry_point = "entry";  // ← CAMBIAR PRIORIDAD
+    if (functions.find(entry_point) == functions.end())
     {
-        entry_point = functions.begin()->first;
+        entry_point = "main";
+        if (functions.find(entry_point) == functions.end() && !functions.empty())
+        {
+            entry_point = functions.begin()->first;
+        }
     }
     
     if (functions.find(entry_point) != functions.end())
     {
+        std::cout << "Ejecutando función: " << entry_point << std::endl;
         // Ejecutar función de entrada
         executeFunction(entry_point, {});
     }
@@ -384,24 +634,41 @@ int CILInterpreter::findLabel(const CILFunction& func, const std::string& label)
     return 0; // Si no encuentra la etiqueta, ir al inicio
 }
 
+// Actualizar shouldJump para evaluar comparaciones correctamente
+
 bool CILInterpreter::shouldJump(const CILInstruction& instr)
 {
-    if (instr.args.size() < 2)
+    if (instr.args.empty())
         return false;
     
+    // Si hay operador de comparación, evaluarlo
+    if (!instr.op.empty() && instr.args.size() >= 2)
+    {
+        CILValue left = getValue(instr.args[0]);
+        CILValue right = getValue(instr.args[1]);
+        
+        double left_num = valueToNumber(left);
+        double right_num = valueToNumber(right);
+        
+        if (instr.op == "==")
+            return left_num == right_num;
+        else if (instr.op == "!=")
+            return left_num != right_num;
+        else if (instr.op == "<")
+            return left_num < right_num;
+        else if (instr.op == ">")
+            return left_num > right_num;
+        else if (instr.op == "<=")
+            return left_num <= right_num;
+        else if (instr.op == ">=")
+            return left_num >= right_num;
+        
+        return false;
+    }
+    
+    // Caso simple: evaluar solo la condición
     CILValue condition = getValue(instr.args[0]);
-    CILValue compare_value = getValue(instr.args[1]);
-    
-    if (instr.op == "==")
-    {
-        return (valueToNumber(condition) == valueToNumber(compare_value));
-    }
-    else if (instr.op == "!=")
-    {
-        return (valueToNumber(condition) != valueToNumber(compare_value));
-    }
-    
-    return false;
+    return valueToBool(condition);
 }
 
 void CILInterpreter::executeInstruction(const CILInstruction& instr)
@@ -417,20 +684,62 @@ void CILInterpreter::executeInstruction(const CILInstruction& instr)
     case CILInstruction::CALL:
         executeCall(instr);
         break;
+    case CILInstruction::VCALL:
+        executeVCall(instr);
+        break;
+    case CILInstruction::PARAM:
+        executeParam(instr);
+        break;
+    case CILInstruction::GETATTR:        // ← NUEVO CASO
+        executeGetAttr(instr);
+        break;
+    case CILInstruction::SETATTR:        // ← NUEVO CASO
+        executeSetAttr(instr);
+        break;
+    case CILInstruction::ALLOCATE:
+        executeAllocate(instr);
+        break;
+    case CILInstruction::ARRAY:
+        executeArray(instr);
+        break;
+    case CILInstruction::TYPEOF:
+        executeTypeOf(instr);
+        break;
+    case CILInstruction::LOAD:
+        executeLoad(instr);
+        break;
+    case CILInstruction::LENGTH:
+        executeLength(instr);
+        break;
+    case CILInstruction::CONCAT:
+        executeConcat(instr);
+        break;
+    case CILInstruction::SUBSTRING:
+        executeSubstring(instr);
+        break;
+    case CILInstruction::STR:
+        executeStr(instr);
+        break;
+    case CILInstruction::read_INSTR: 
+        executeRead(instr);
+        break;
+    case CILInstruction::PRINT:
+        executePrint(instr);
+        break;
+    case CILInstruction::GETINDEX:
+        executeGetIndex(instr);
+        break;
+    case CILInstruction::SETINDEX:
+        executeSetIndex(instr);
+        break;
     case CILInstruction::RETURN:
         executeReturn(instr);
-        break;
-    case CILInstruction::GOTO:
-        executeGoto(instr);
-        break;
-    case CILInstruction::IF_GOTO:
-        executeIfGoto(instr);
         break;
     case CILInstruction::LABEL:
         // Las etiquetas no hacen nada por sí mismas
         break;
     default:
-        std::cerr << "Instrucción no implementada\n";
+        std::cerr << "Instrucción no implementada: " << static_cast<int>(instr.type) << std::endl;
         break;
     }
 }
@@ -560,16 +869,6 @@ void CILInterpreter::executeReturn(const CILInstruction& instr)
     {
         current_frame->return_value = getValue(instr.args[0]);
     }
-}
-
-void CILInterpreter::executeGoto(const CILInstruction& instr)
-{
-    // Esta función ya no se usa con el nuevo enfoque
-}
-
-void CILInterpreter::executeIfGoto(const CILInstruction& instr)
-{
-    // Esta función ya no se usa con el nuevo enfoque
 }
 
 CILValue CILInterpreter::getValue(const std::string& name)
@@ -715,6 +1014,11 @@ void CILInterpreter::printValue(const CILValue& value)
             else
                 std::cout << v;
         }
+        else if constexpr (std::is_same_v<std::decay_t<decltype(v)>, void*>)
+        {
+            // Para punteros, mostrar dirección
+            std::cout << "Object@"<< v;
+        }
         else
         {
             std::cout << v;
@@ -729,6 +1033,8 @@ std::string CILInterpreter::valueToString(const CILValue& value)
             return v;
         else if constexpr (std::is_same_v<std::decay_t<decltype(v)>, bool>)
             return v ? "true" : "false";
+        else if constexpr (std::is_same_v<std::decay_t<decltype(v)>, void*>)
+            return "Object@" + std::to_string(reinterpret_cast<uintptr_t>(v));
         else
             return std::to_string(v);
     }, value);
@@ -743,6 +1049,8 @@ double CILInterpreter::valueToNumber(const CILValue& value)
             return v ? 1.0 : 0.0;
         else if constexpr (std::is_same_v<std::decay_t<decltype(v)>, std::string>)
             return std::stod(v);
+        else if constexpr (std::is_same_v<std::decay_t<decltype(v)>, void*>)
+            return reinterpret_cast<uintptr_t>(v);
         else
             return 0.0;
     }, value);
@@ -757,7 +1065,404 @@ bool CILInterpreter::valueToBool(const CILValue& value)
             return v != 0.0;
         else if constexpr (std::is_same_v<std::decay_t<decltype(v)>, std::string>)
             return !v.empty();
+        else if constexpr (std::is_same_v<std::decay_t<decltype(v)>, void*>)
+            return v != nullptr;
         else
             return false;
     }, value);
+}
+
+// Implementaciones de los métodos adicionales
+
+void CILInterpreter::executeAllocate(const CILInstruction& instr)
+{
+    if (instr.args.empty())
+        return;
+    
+    std::string type_name = instr.args[0];
+    auto obj = std::make_unique<CILObject>(type_name);
+    void* ptr = obj.get();
+    objects.push_back(std::move(obj));
+    
+    setValue(instr.dest, ptr);
+}
+
+void CILInterpreter::executeArray(const CILInstruction& instr)
+{
+    if (instr.args.empty())
+        return;
+    
+    CILValue size_val = getValue(instr.args[0]);
+    size_t size = static_cast<size_t>(valueToNumber(size_val));
+    
+    auto arr = std::make_unique<CILArray>(size);
+    void* ptr = arr.get();
+    arrays.push_back(std::move(arr));
+    
+    setValue(instr.dest, ptr);
+}
+
+void CILInterpreter::executeTypeOf(const CILInstruction& instr)
+{
+    if (instr.args.empty())
+        return;
+    
+    CILValue obj_val = getValue(instr.args[0]);
+    if (std::holds_alternative<void*>(obj_val))
+    {
+        void* ptr = std::get<void*>(obj_val);
+        CILObject* obj = getObject(ptr);
+        if (obj)
+        {
+            setValue(instr.dest, obj->type_name);
+            return;
+        }
+    }
+    
+    setValue(instr.dest, std::string("Object"));
+}
+
+void CILInterpreter::executeLoad(const CILInstruction& instr)
+{
+    if (instr.args.empty())
+        return;
+    
+    std::string label = instr.args[0];
+    if (string_constants.find(label) != string_constants.end())
+    {
+        setValue(instr.dest, string_constants[label]);
+    }
+    else
+    {
+        setValue(instr.dest, std::string(""));
+    }
+}
+
+void CILInterpreter::executeLength(const CILInstruction& instr)
+{
+    if (instr.args.empty())
+        return;
+    
+    CILValue str_val = getValue(instr.args[0]);
+    std::string str = valueToString(str_val);
+    setValue(instr.dest, static_cast<double>(str.length()));
+}
+
+void CILInterpreter::executeConcat(const CILInstruction& instr)
+{
+    if (instr.args.size() < 2)
+        return;
+    
+    CILValue str1_val = getValue(instr.args[0]);
+    CILValue str2_val = getValue(instr.args[1]);
+    
+    std::string result = valueToString(str1_val) + valueToString(str2_val);
+    setValue(instr.dest, result);
+}
+
+void CILInterpreter::executeSubstring(const CILInstruction& instr)
+{
+    if (instr.args.size() < 3)
+        return;
+    
+    CILValue str_val = getValue(instr.args[0]);
+    CILValue start_val = getValue(instr.args[1]);
+    CILValue length_val = getValue(instr.args[2]);
+    
+    std::string str = valueToString(str_val);
+    size_t start = static_cast<size_t>(valueToNumber(start_val));
+    size_t length = static_cast<size_t>(valueToNumber(length_val));
+    
+    if (start < str.length())
+    {
+        std::string result = str.substr(start, length);
+        setValue(instr.dest, result);
+    }
+    else
+    {
+        setValue(instr.dest, std::string(""));
+    }
+}
+
+void CILInterpreter::executeStr(const CILInstruction& instr)
+{
+    if (instr.args.empty())
+        return;
+    
+    CILValue num_val = getValue(instr.args[0]);
+    double num = valueToNumber(num_val);
+    
+    std::string result;
+    if (num == static_cast<int>(num))
+    {
+        result = std::to_string(static_cast<int>(num));
+    }
+    else
+    {
+        result = std::to_string(num);
+    }
+    
+    setValue(instr.dest, result);
+}
+
+void CILInterpreter::executeRead(const CILInstruction& instr)
+{
+    std::string line;
+    std::getline(std::cin, line);
+    setValue(instr.dest, line);
+}
+
+void CILInterpreter::executePrint(const CILInstruction& instr)
+{
+    if (!instr.args.empty())
+    {
+        CILValue value = getValue(instr.args[0]);
+        printValue(value);
+        // No agregar salto de línea según especificación
+    }
+}
+
+void CILInterpreter::executeGetIndex(const CILInstruction& instr)
+{
+    if (instr.args.size() < 2)
+        return;
+    
+    CILValue arr_val = getValue(instr.args[0]);
+    CILValue index_val = getValue(instr.args[1]);
+    
+    if (std::holds_alternative<void*>(arr_val))
+    {
+        void* ptr = std::get<void*>(arr_val);
+        CILArray* arr = getArray(ptr);
+        if (arr)
+        {
+            size_t index = static_cast<size_t>(valueToNumber(index_val));
+            if (index < arr->elements.size())
+            {
+                setValue(instr.dest, arr->elements[index]);
+                return;
+            }
+        }
+    }
+    
+    setValue(instr.dest, 0.0);
+}
+
+void CILInterpreter::executeSetIndex(const CILInstruction& instr)
+{
+    if (instr.args.size() < 3)
+        return;
+    
+    CILValue arr_val = getValue(instr.args[0]);
+    CILValue index_val = getValue(instr.args[1]);
+    CILValue value_val = getValue(instr.args[2]);
+    
+    if (std::holds_alternative<void*>(arr_val))
+    {
+        void* ptr = std::get<void*>(arr_val);
+        CILArray* arr = getArray(ptr);
+        if (arr)
+        {
+            size_t index = static_cast<size_t>(valueToNumber(index_val));
+            if (index < arr->elements.size())
+            {
+                arr->elements[index] = value_val;
+            }
+        }
+    }
+}
+
+void CILInterpreter::executeParam(const CILInstruction& instr)
+{
+    if (instr.args.empty() || !current_frame)
+        return;
+    
+    CILValue param_value = getValue(instr.args[0]);
+    current_frame->parameters.push_back(param_value);
+}
+
+void CILInterpreter::executeVCall(const CILInstruction& instr)
+{
+    if (instr.args.size() < 2)
+        return;
+    
+    std::string type_name = instr.args[0];
+    std::string method_name = instr.args[1];
+    
+    // Resolver la llamada al método usando la tabla de tipos
+    std::string function_label;
+    try
+    {
+        function_label = resolveMethodCall(type_name, method_name);
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error resolviendo método " << type_name << "::" << method_name 
+                 << " - " << e.what() << std::endl;
+        // Fallback al comportamiento anterior
+        function_label = type_name + "_" + method_name;
+    }
+    
+    if (current_frame)
+    {
+        std::vector<CILValue> call_args = current_frame->parameters;
+        current_frame->parameters.clear(); // Limpiar parámetros después de usar
+        
+        std::cout << "Llamando método virtual: " << type_name << "::" << method_name 
+                 << " -> " << function_label << std::endl;
+        
+        CILValue result = executeFunction(function_label, call_args);
+        setValue(instr.dest, result);
+    }
+}
+
+CILObject* CILInterpreter::getObject(void* ptr)
+{
+    for (auto& obj : objects)
+    {
+        if (obj.get() == ptr)
+            return obj.get();
+    }
+    return nullptr;
+}
+
+CILArray* CILInterpreter::getArray(void* ptr)
+{
+    for (auto& arr : arrays)
+    {
+        if (arr.get() == ptr)
+            return arr.get();
+    }
+    return nullptr;
+}
+
+// Agregar implementaciones de los nuevos métodos de tipo
+
+bool CILInterpreter::typeExists(const std::string& type_name) const
+{
+    return type_table.find(type_name) != type_table.end();
+}
+
+const CILTypeInfo& CILInterpreter::getTypeInfo(const std::string& type_name) const
+{
+    auto it = type_table.find(type_name);
+    if (it == type_table.end())
+    {
+        throw std::runtime_error("Tipo no encontrado: " + type_name);
+    }
+    return it->second;
+}
+
+std::string CILInterpreter::resolveMethodCall(const std::string& type_name, const std::string& method_name) const
+{
+    // Buscar el método en el tipo, con soporte para herencia
+    std::string current_type = type_name;
+    
+    while (!current_type.empty() && current_type != "Object")
+    {
+        if (typeExists(current_type))
+        {
+            const auto& type_info = getTypeInfo(current_type);
+            if (type_info.hasMethod(method_name))
+            {
+                return type_info.getMethodLabel(method_name);
+            }
+            
+            // Buscar en el tipo padre
+            current_type = type_info.parent;
+        }
+        else
+        {
+            break;
+        }
+    }
+    
+    // Si no se encuentra, intentar con el nombre completo del método
+    std::string full_method_name = type_name + "_" + method_name;
+    return full_method_name;
+}
+
+// Implementar métodos para manejo de atributos
+
+void CILInterpreter::executeGetAttr(const CILInstruction& instr)
+{
+    if (instr.args.size() < 2)
+        return;
+    
+    CILValue obj_val = getValue(instr.args[0]);
+    std::string attr_name = instr.args[1];
+    
+    if (std::holds_alternative<void*>(obj_val))
+    {
+        void* ptr = std::get<void*>(obj_val);
+        CILObject* obj = getObject(ptr);
+        if (obj)
+        {
+            // Verificar que el atributo existe en el tipo
+            if (typeExists(obj->type_name))
+            {
+                const auto& type_info = getTypeInfo(obj->type_name);
+                if (!type_info.hasAttribute(attr_name))
+                {
+                    std::cerr << "Advertencia: Atributo " << attr_name 
+                             << " no declarado en tipo " << obj->type_name << std::endl;
+                }
+            }
+            
+            // Obtener el valor del atributo
+            auto it = obj->fields.find(attr_name);
+            if (it != obj->fields.end())
+            {
+                setValue(instr.dest, it->second);
+            }
+            else
+            {
+                // Atributo no inicializado, devolver valor por defecto
+                setValue(instr.dest, 0.0);
+            }
+            return;
+        }
+    }
+    
+    // Error: no es un objeto válido
+    std::cerr << "Error: GETATTR en objeto inválido" << std::endl;
+    setValue(instr.dest, 0.0);
+}
+
+void CILInterpreter::executeSetAttr(const CILInstruction& instr)
+{
+    if (instr.args.size() < 3)
+        return;
+    
+    CILValue obj_val = getValue(instr.args[0]);
+    std::string attr_name = instr.args[1];
+    CILValue new_value = getValue(instr.args[2]);
+    
+    if (std::holds_alternative<void*>(obj_val))
+    {
+        void* ptr = std::get<void*>(obj_val);
+        CILObject* obj = getObject(ptr);
+        if (obj)
+        {
+            // Verificar que el atributo existe en el tipo
+            if (typeExists(obj->type_name))
+            {
+                const auto& type_info = getTypeInfo(obj->type_name);
+                if (!type_info.hasAttribute(attr_name))
+                {
+                    std::cerr << "Advertencia: Atributo " << attr_name 
+                             << " no declarado en tipo " << obj->type_name << std::endl;
+                }
+            }
+            
+            // Establecer el valor del atributo
+            obj->fields[attr_name] = new_value;
+            std::cout << "SETATTR: " << obj->type_name << "." << attr_name 
+                     << " = " << valueToString(new_value) << std::endl;
+            return;
+        }
+    }
+    
+    // Error: no es un objeto válido
+    std::cerr << "Error: SETATTR en objeto inválido" << std::endl;
 }

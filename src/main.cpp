@@ -7,6 +7,8 @@
 #include "PrintVisitor/print_visitor.hpp"
 #include "Evaluator/evaluator.hpp"
 #include "Value/value.hpp"
+#include "CodeGen/cil_generator.hpp"
+#include "CodeGen/cil_interpreter.hpp"
 
 extern FILE *yyin;
 extern int yyparse();
@@ -73,17 +75,48 @@ int main(int argc, char *argv[])
     rootAST->accept(&printer);
 
     // 5) Ejecución
-    std::cout << "\n=== Ejecucion ===\n";
+    // std::cout << "\n=== Ejecucion ===\n";
+    // try
+    // {
+    //     EvaluatorVisitor evaluator;
+    //     rootAST->accept(&evaluator);
+    // }
+    // catch (const std::exception &e)
+    // {
+    //     std::cerr << "Error de ejecución: " << e.what() << "\n";
+    //     std::fclose(file);
+    //     return 4;
+    // }
+
+    // 6) Generación de código CIL
+    std::cout << "\n=== Generacion de Codigo CIL ===\n";
+    std::string cilCode;
     try
     {
-        EvaluatorVisitor evaluator;
-        rootAST->accept(&evaluator);
+        CILGenerator cilGen;
+        cilCode = cilGen.generateCode(rootAST);
+        std::cout << cilCode << std::endl;
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Error de ejecución: " << e.what() << "\n";
+        std::cerr << "Error en generación de código: " << e.what() << "\n";
         std::fclose(file);
-        return 4;
+        return 5;
+    }
+
+    // 7) Ejecución del código CIL
+    std::cout << "\n=== Ejecucion CIL ===\n";
+    try
+    {
+        CILInterpreter interpreter;
+        interpreter.loadProgram(cilCode);
+        interpreter.execute();
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "Error en ejecución CIL: " << e.what() << "\n";
+        std::fclose(file);
+        return 6;
     }
 
     fclose(file);

@@ -13,6 +13,8 @@ PARSER_GEN_HPP = src/Parser/parser.tab.hpp
 MAIN_SRC         = src/main.cpp
 TYPE_SRC         = src/Type/type.cpp
 TYPEINF_SRC      = src/Type/type_inferer.cpp
+CODEGEN_SRC      = src/CodeGen/cil_generator.cpp
+CILINTER_SRC     = src/CodeGen/cil_interpreter.cpp
 
 # Objetos resultantes
 OBJS = \
@@ -20,7 +22,10 @@ OBJS = \
   $(LEXER_GEN:.cpp=.o)    \
   $(MAIN_SRC:.cpp=.o)     \
   $(TYPE_SRC:.cpp=.o)     \
-  $(TYPEINF_SRC:.cpp=.o)
+  $(TYPEINF_SRC:.cpp=.o)  \
+  $(CODEGEN_SRC:.cpp=.o)  \
+  $(CILINTER_SRC:.cpp=.o)
+
 
 # Ejecutable
 BIN_DIR    = hulk

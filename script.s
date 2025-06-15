@@ -38,10 +38,12 @@ L0:
     lw $t1, 16($fp)
     mul $t2, $t0, $t1
     # Result of result * i in $t2
-    # Temporal t1 managed in registers only
+    # Updating result with operation result
     sw $t2, 12($fp)
-    # Temporal t2 managed in registers only
-    sw $t2, 16($fp)
+    # Incrementing i
+    lw $t0, 16($fp)
+    addi $t0, $t0, 1
+    sw $t0, 16($fp)
     j L0
 L1:
     lw $v0, 12($fp)
@@ -78,10 +80,12 @@ L2:
     lw $t1, 16($fp)
     add $t2, $t0, $t1
     # Result of sum + current in $t2
-    # Temporal t4 managed in registers only
+    # Updating sum with operation result
     sw $t2, 12($fp)
-    # Temporal t5 managed in registers only
-    sw $t2, 16($fp)
+    # Incrementing current
+    lw $t0, 16($fp)
+    addi $t0, $t0, 1
+    sw $t0, 16($fp)
     j L2
 L3:
     lw $v0, 12($fp)

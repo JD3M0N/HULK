@@ -506,7 +506,8 @@ void CILGenerator::visit(AssignExpr* expr)
     expr->value->accept(this);
     std::string value = last_temp;
     
-    emitAssignment(expr->name, value);
+    // Usar asignación destructiva para AssignExpr (operador :=)
+    emitInstruction(expr->name + " := " + value);
     last_temp = expr->name; // El resultado de la asignación es el valor asignado
 }
 

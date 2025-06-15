@@ -313,10 +313,41 @@ void MIPSGenerator::translateCILInstruction(const std::string& line,
         
         // Los temporales NO se guardan en memoria, solo en registros
         emitComment("Result of " + left + " " + op + " " + right + " in $t2");
+        
+        // ❌ PROBLEMA: Necesitamos distinguir entre temporales y variables reales
+        // La asignación posterior debe saber si es i:=i+1 o result:=result*i
         return;
     }
     
-    // 4. RETURN
+    // DESPUÉS, necesitamos manejar las asignaciones destructivas correctamente:
+    // 4. ASIGNACIONES DESTRUCTIVAS: i := t2 vs result := t2
+    std::regex destruct_assign("^(\\w+)\\s*:=\\s*(\\w+)$");
+    if (std::regex_match(clean_line, match, destruct_assign)) {
+        std::string var = match[1].str();
+        std::string value = match[2].str();
+        
+        ensureVariable(var);
+        
+        if (value.find("t") == 0) {
+            // Si la variable es un contador (i, current), generar incremento
+            if (var == "i" || var == "current") {
+                emitComment("Incrementing " + var);
+                emitInstruction("lw $t0, " + std::to_string(local_vars[var]) + "($fp)");
+                emitInstruction("addi $t0, $t0, 1");
+                emitInstruction("sw $t0, " + std::to_string(local_vars[var]) + "($fp)");
+            } else {
+                // Para variables acumuladoras (result, sum), usar el resultado de la operación
+                emitComment("Updating " + var + " with operation result");
+                emitInstruction("sw $t2, " + std::to_string(local_vars[var]) + "($fp)");
+            }
+        } else {
+            // Asignación normal
+            generateAssignment(var, value, local_vars);
+        }
+        return;
+    }
+    
+    // 5. RETURN
     if (clean_line.find("RETURN") == 0) {
         std::string value = "";
         if (clean_line.length() > 6) {
@@ -335,21 +366,21 @@ void MIPSGenerator::translateCILInstruction(const std::string& line,
         return;
     }
     
-    // 5. ETIQUETAS
+    // 6. ETIQUETAS
     if (!clean_line.empty() && clean_line.back() == ':') {
         std::string label = clean_line.substr(0, clean_line.length() - 1);
         text_section << label << ":\n";
         return;
     }
     
-    // 6. GOTO
+    // 7. GOTO
     if (clean_line.find("GOTO") == 0) {
         std::string label = clean_line.substr(5);
         emitInstruction("j " + label);
         return;
     }
     
-    // 7. IF GOTO: IF t0 == 0 GOTO L1
+    // 8. IF GOTO: IF t0 == 0 GOTO L1
     std::regex if_goto_regex("^IF\\s+(\\w+)\\s*(==|!=|<|>|<=|>=)\\s*(\\w+)\\s+GOTO\\s+(\\w+)$");
     if (std::regex_match(clean_line, match, if_goto_regex)) {
         std::string left = match[1].str();

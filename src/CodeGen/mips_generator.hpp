@@ -47,12 +47,11 @@ public:
     void processTypesSection(const std::string& section);
     void processCodeSection(const std::string& section);
     
-    // ← NUEVA SIGNATURA CON MAPEO DE VARIABLES
+    // ← SIGNATURA SIMPLIFICADA
     void translateCILInstruction(const std::string& line, 
-                               std::unordered_map<std::string, int>& local_vars,
-                               int& current_offset);
+                               std::unordered_map<std::string, int>& local_vars);
     
-    // ← NUEVAS SIGNATURAS CON STACK FRAMES
+    // ← SIGNATURAS CON STACK FRAMES
     void generateAssignment(const std::string& dest, const std::string& src,
                           const std::unordered_map<std::string, int>& local_vars);
     void generateBinaryOp(const std::string& dest, const std::string& left, 

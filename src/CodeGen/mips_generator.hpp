@@ -26,6 +26,9 @@ private:
     std::unordered_map<std::string, int> function_labels;
     int label_counter = 0;
     
+    // ← NUEVO MÉTODO AUXILIAR
+    bool isLiteral(const std::string& var);
+    
 public:
     MIPSGenerator();
     
@@ -44,17 +47,27 @@ public:
     void processTypesSection(const std::string& section);
     void processCodeSection(const std::string& section);
     
-    void translateCILInstruction(const std::string& line);
-    void generatePrint(const std::string& value);
+    // ← NUEVA SIGNATURA CON MAPEO DE VARIABLES
+    void translateCILInstruction(const std::string& line, 
+                               std::unordered_map<std::string, int>& local_vars,
+                               int& current_offset);
     
-    // Generación de instrucciones MIPS
-    void generateAssignment(const std::string& dest, const std::string& src);
+    // ← NUEVAS SIGNATURAS CON STACK FRAMES
+    void generateAssignment(const std::string& dest, const std::string& src,
+                          const std::unordered_map<std::string, int>& local_vars);
     void generateBinaryOp(const std::string& dest, const std::string& left, 
-                         const std::string& op, const std::string& right);
+                         const std::string& op, const std::string& right,
+                         const std::unordered_map<std::string, int>& local_vars);
     void generateFunctionCall(const std::string& dest, const std::string& func, 
-                            const std::vector<std::string>& args);
-    void generateReturn(const std::string& value);
-    void generateConditionalJump(const std::string& condition, const std::string& label);
+                            const std::vector<std::string>& args,
+                            const std::unordered_map<std::string, int>& local_vars);
+    void generatePrint(const std::string& value,
+                     const std::unordered_map<std::string, int>& local_vars);
+    void generateReturn(const std::string& value,
+                      const std::unordered_map<std::string, int>& local_vars);
+    void generateConditionalJump(const std::string& left, const std::string& op, 
+                               const std::string& right, const std::string& label,
+                               const std::unordered_map<std::string, int>& local_vars);
     
     // Manejo de memoria y heap para objetos
     void generateObjectAllocation(const std::string& dest, const std::string& type);

@@ -5,85 +5,135 @@ str0: .asciiz "hola"
 .globl main
 
 factorial_iterative:
-    # Function: factorial_iterative
-    addi $sp, $sp, -32
-    sw $ra, 28($sp)
-    sw $fp, 24($sp)
+    # Prolog
+    addi $sp, $sp, -48
+    sw $ra, 44($sp)
+    sw $fp, 40($sp)
     move $fp, $sp
-    li $t0, 1.000000
-    li $t1, 1.000000
+    sw $a0, 36($sp)  # n
+    # Function: factorial_iterative
+    # Allocating variable: result at offset -16
+    li $t0, 1
+    sw $t0, -16($fp)
+    # Allocating variable: i at offset -20
+    li $t0, 1
+    sw $t0, -20($fp)
 L0:
-    beq $t2, $t3, L1
-    mul $t4, $t0, $t1
-    move $t0, $t4
-    move $t1, $t5
+    # Allocating variable: t0 at offset -24
+    lw $t0, -20($fp)
+    lw $t1, -12($fp)
+    sle $t2, $t0, $t1
+    sw $t2, -24($fp)
+    lw $t0, -24($fp)
+    li $t1, 0
+    beq $t0, $t1, L1
+    # Allocating variable: t1 at offset -28
+    lw $t0, -16($fp)
+    lw $t1, -20($fp)
+    mul $t2, $t0, $t1
+    sw $t2, -28($fp)
+    lw $t0, -28($fp)
+    sw $t0, -16($fp)
+    # Allocating variable: t2 at offset -32
+    lw $t0, -32($fp)
+    sw $t0, -20($fp)
     j L0
 L1:
-    move $v0, $t0
-    lw $ra, 28($sp)
-    lw $fp, 24($sp)
-    addi $sp, $sp, 32
+    lw $v0, -16($fp)
+    # Epilog
+    lw $ra, 44($sp)
+    lw $fp, 40($sp)
+    addi $sp, $sp, 48
     jr $ra
 
 sum_range:
-    # Function: sum_range
-    addi $sp, $sp, -32
-    sw $ra, 28($sp)
-    sw $fp, 24($sp)
+    # Prolog
+    addi $sp, $sp, -48
+    sw $ra, 44($sp)
+    sw $fp, 40($sp)
     move $fp, $sp
-    li $t6, 0.000000
-    move $t7, stack_0
+    sw $a0, 36($sp)  # start
+    sw $a1, 32($sp)  # end
+    # Function: sum_range
+    # Allocating variable: sum at offset -20
+    li $t0, 0
+    sw $t0, -20($fp)
+    # Allocating variable: current at offset -24
+    lw $t0, -12($fp)
+    sw $t0, -24($fp)
 L2:
-    beq stack_4, $t3, L3
-    add stack_8, $t6, $t7
-    move $t6, stack_8
-    move $t7, stack_12
+    # Allocating variable: t3 at offset -28
+    lw $t0, -24($fp)
+    lw $t1, -16($fp)
+    sle $t2, $t0, $t1
+    sw $t2, -28($fp)
+    lw $t0, -28($fp)
+    li $t1, 0
+    beq $t0, $t1, L3
+    # Allocating variable: t4 at offset -32
+    lw $t0, -20($fp)
+    lw $t1, -24($fp)
+    add $t2, $t0, $t1
+    sw $t2, -32($fp)
+    lw $t0, -32($fp)
+    sw $t0, -20($fp)
+    # Allocating variable: t5 at offset -36
+    lw $t0, -36($fp)
+    sw $t0, -24($fp)
     j L2
 L3:
-    move $v0, $t6
-    lw $ra, 28($sp)
-    lw $fp, 24($sp)
-    addi $sp, $sp, 32
+    lw $v0, -20($fp)
+    # Epilog
+    lw $ra, 44($sp)
+    lw $fp, 40($sp)
+    addi $sp, $sp, 48
     jr $ra
 
 main:
-    # Function: entry
-    addi $sp, $sp, -32
-    sw $ra, 28($sp)
-    sw $fp, 24($sp)
+    # Prolog
+    addi $sp, $sp, -48
+    sw $ra, 44($sp)
+    sw $fp, 40($sp)
     move $fp, $sp
-    move $a0, stack_16
+    # Function: entry
+    # Allocating variable: t6 at offset -12
+    li $a0, 5
     jal factorial_iterative
-    move stack_20, $v0
-    move $a0, stack_20
-    move $a0, stack_20
+    sw $v0, -12($fp)
+    # Allocating variable: t7 at offset -16
+    lw $a0, -12($fp)
+    lw $a0, -12($fp)
     li $v0, 1
     syscall
     li $a0, 10
     li $v0, 11
     syscall
-    move $a0, stack_24
-    move $a1, stack_28
+    # Allocating variable: t8 at offset -20
+    li $a0, 1
+    li $a1, 10
     jal sum_range
-    move stack_32, $v0
-    move $a0, stack_32
-    move $a0, stack_32
+    sw $v0, -20($fp)
+    # Allocating variable: t9 at offset -24
+    lw $a0, -20($fp)
+    lw $a0, -20($fp)
     li $v0, 1
     syscall
     li $a0, 10
     li $v0, 11
     syscall
-    move $a0, stack_36
-    move $a0, stack_36
+    # Allocating variable: t10 at offset -28
+    li $a0, str0
+    la $a0, str0
     li $v0, 4
     syscall
     li $a0, 10
     li $v0, 11
     syscall
-    move $v0, $t3
-    lw $ra, 28($sp)
-    lw $fp, 24($sp)
-    addi $sp, $sp, 32
+    li $v0, 0
+    # Epilog
+    lw $ra, 44($sp)
+    lw $fp, 40($sp)
+    addi $sp, $sp, 48
     li $v0, 10
     syscall
 

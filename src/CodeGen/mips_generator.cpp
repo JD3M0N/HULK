@@ -68,7 +68,6 @@ void MIPSGenerator::processDataSection(const std::string& line)
 void MIPSGenerator::processTypesSection(const std::string& line)
 {
     // Para MIPS, los tipos se manejan en tiempo de ejecución
-    // Aquí podríamos generar tablas de métodos virtuales si fuera necesario
 }
 
 void MIPSGenerator::processCodeSection(const std::string& section)
@@ -77,6 +76,11 @@ void MIPSGenerator::processCodeSection(const std::string& section)
     std::string line;
     std::string current_function;
     bool in_function = false;
+    
+    // ← NUEVO: Mapeo de variables a offsets en el stack frame
+    std::unordered_map<std::string, int> local_vars;
+    std::vector<std::string> args;
+    int current_offset = -12; // Empezar después de $ra(-4) y $fp(-8)
     
     while (std::getline(stream, line)) {
         line.erase(0, line.find_first_not_of(" \t"));
@@ -92,6 +96,11 @@ void MIPSGenerator::processCodeSection(const std::string& section)
             current_function = match[1].str();
             in_function = true;
             
+            // ← RESETEAR MAPEO DE VARIABLES
+            local_vars.clear();
+            args.clear();
+            current_offset = -12;
+            
             // Generar etiqueta de función
             if (current_function == "entry") {
                 text_section << "main:\n";
@@ -99,22 +108,57 @@ void MIPSGenerator::processCodeSection(const std::string& section)
                 text_section << current_function << ":\n";
             }
             
-            // Prólogo de función
             emitComment("Function: " + current_function);
-            emitInstruction("addi $sp, $sp, -32");  // Reservar espacio en stack
-            emitInstruction("sw $ra, 28($sp)");     // Guardar return address
-            emitInstruction("sw $fp, 24($sp)");     // Guardar frame pointer
-            emitInstruction("move $fp, $sp");       // Establecer nuevo frame pointer
+            continue;
+        }
+        
+        // ← PROCESAR ARG PARA ASIGNAR OFFSETS
+        if (in_function && line.find("ARG ") == 0) {
+            std::string arg_name = line.substr(4);
+            if (arg_name.back() == ';') arg_name.pop_back();
             
+            args.push_back(arg_name);
+            local_vars[arg_name] = current_offset;
+            current_offset -= 4;
             continue;
         }
         
         if (line == "}") {
             if (in_function) {
-                // Epílogo de función
-                emitInstruction("lw $ra, 28($sp)");
-                emitInstruction("lw $fp, 24($sp)");
-                emitInstruction("addi $sp, $sp, 32");
+                // ← GENERAR PRÓLOGO CORRECTO (al principio de función)
+                int frame_size = (-current_offset) + 8; // +8 para $ra y $fp
+                frame_size = (frame_size + 15) & ~15;   // Alinear a 16 bytes
+                
+                // Insertar prólogo al inicio de la función
+                std::string function_body = text_section.str();
+                size_t func_start = function_body.rfind(current_function == "entry" ? "main:" : current_function + ":");
+                
+                std::ostringstream prolog;
+                prolog << "    # Prolog\n";
+                prolog << "    addi $sp, $sp, -" << frame_size << "\n";
+                prolog << "    sw $ra, " << (frame_size - 4) << "($sp)\n";
+                prolog << "    sw $fp, " << (frame_size - 8) << "($sp)\n";
+                prolog << "    move $fp, $sp\n";
+                
+                // ← CARGAR ARGUMENTOS DESDE REGISTROS A STACK
+                for (size_t i = 0; i < args.size() && i < 4; i++) {
+                    int offset = local_vars[args[i]];
+                    prolog << "    sw $a" << i << ", " << (offset + frame_size) << "($sp)  # " << args[i] << "\n";
+                }
+                
+                // Insertar prólogo
+                if (func_start != std::string::npos) {
+                    size_t insert_pos = function_body.find('\n', func_start) + 1;
+                    function_body.insert(insert_pos, prolog.str());
+                    text_section.str(function_body);
+                    text_section.seekp(0, std::ios::end);
+                }
+                
+                // ← GENERAR EPÍLOGO CORRECTO
+                emitComment("Epilog");
+                emitInstruction("lw $ra, " + std::to_string(frame_size - 4) + "($sp)");
+                emitInstruction("lw $fp, " + std::to_string(frame_size - 8) + "($sp)");
+                emitInstruction("addi $sp, $sp, " + std::to_string(frame_size));
                 
                 if (current_function == "entry") {
                     emitInstruction("li $v0, 10");  // Exit syscall
@@ -130,36 +174,60 @@ void MIPSGenerator::processCodeSection(const std::string& section)
         }
         
         if (in_function) {
-            translateCILInstruction(line);
+            translateCILInstruction(line, local_vars, current_offset);
         }
     }
 }
 
-void MIPSGenerator::translateCILInstruction(const std::string& line)
+// ← NUEVA FUNCIÓN CON MAPEO DE VARIABLES MEJORADO
+void MIPSGenerator::translateCILInstruction(const std::string& line, 
+                                          std::unordered_map<std::string, int>& local_vars,
+                                          int& current_offset)
 {
     std::string clean_line = line;
     if (!clean_line.empty() && clean_line.back() == ';')
         clean_line.pop_back();
     
-    // ASSIGNMENT: t0 = 5
+    // ← FUNCIÓN MEJORADA PARA ASIGNAR OFFSET A NUEVAS VARIABLES
+    auto ensureVariable = [&](const std::string& var) {
+        // Verificar que no sea un literal numérico, string label, o ya existente
+        if (local_vars.find(var) == local_vars.end() && 
+            !isLiteral(var) && 
+            string_labels.find(var) == string_labels.end()) {
+            local_vars[var] = current_offset;
+            current_offset -= 4;
+            emitComment("Allocating variable: " + var + " at offset " + std::to_string(local_vars[var]));
+        }
+    };
+    
+    // ASSIGNMENT: t0 = 5 o t0 = t1
     std::regex assign_regex("(\\w+)\\s*=\\s*([\\w\\-\\.]+)");
     std::smatch match;
     
     if (std::regex_match(clean_line, match, assign_regex)) {
         std::string dest = match[1].str();
         std::string src = match[2].str();
-        generateAssignment(dest, src);
+        
+        ensureVariable(dest);
+        ensureVariable(src);
+        
+        generateAssignment(dest, src, local_vars);
         return;
     }
     
     // BINARY OP: t2 = t0 + t1
-    std::regex binop_regex("(\\w+)\\s*=\\s*(\\w+)\\s*([+\\-*/])\\s*(\\w+)");
+    std::regex binop_regex("(\\w+)\\s*=\\s*(\\w+)\\s*([+\\-*/<=!>]+)\\s*(\\w+)");
     if (std::regex_match(clean_line, match, binop_regex)) {
         std::string dest = match[1].str();
         std::string left = match[2].str();
         std::string op = match[3].str();
         std::string right = match[4].str();
-        generateBinaryOp(dest, left, op, right);
+        
+        ensureVariable(dest);
+        ensureVariable(left);
+        ensureVariable(right);
+        
+        generateBinaryOp(dest, left, op, right, local_vars);
         return;
     }
     
@@ -170,14 +238,17 @@ void MIPSGenerator::translateCILInstruction(const std::string& line)
         std::string func = match[2].str();
         std::string args_str = match[3].str();
         
+        ensureVariable(dest);
+        
         std::vector<std::string> args;
         std::istringstream iss(args_str);
         std::string arg;
         while (iss >> arg) {
+            ensureVariable(arg);
             args.push_back(arg);
         }
         
-        generateFunctionCall(dest, func, args);
+        generateFunctionCall(dest, func, args, local_vars);
         return;
     }
     
@@ -186,15 +257,17 @@ void MIPSGenerator::translateCILInstruction(const std::string& line)
         std::string value = "";
         if (clean_line.length() > 6) {
             value = clean_line.substr(7);
+            ensureVariable(value);
         }
-        generateReturn(value);
+        generateReturn(value, local_vars);
         return;
     }
     
     // PRINT: PRINT value
     if (clean_line.find("PRINT") == 0) {
         std::string value = clean_line.substr(6);
-        generatePrint(value);
+        ensureVariable(value);
+        generatePrint(value, local_vars);
         return;
     }
     
@@ -212,101 +285,170 @@ void MIPSGenerator::translateCILInstruction(const std::string& line)
         return;
     }
     
-    // IF GOTO
-    std::regex if_goto_regex("IF\\s+(\\w+)\\s*(==|!=)\\s*(\\w+)\\s+GOTO\\s+(\\w+)");
+    // IF GOTO: IF t0 == 0 GOTO L1
+    std::regex if_goto_regex("IF\\s+(\\w+)\\s*(==|!=|<|>|<=|>=)\\s*(\\w+)\\s+GOTO\\s+(\\w+)");
     if (std::regex_match(clean_line, match, if_goto_regex)) {
         std::string left = match[1].str();
         std::string op = match[2].str();
         std::string right = match[3].str();
         std::string label = match[4].str();
         
-        std::string left_reg = getRegisterForVariable(left);
-        std::string right_reg = getRegisterForVariable(right);
+        ensureVariable(left);
+        ensureVariable(right);
         
-        if (op == "==") {
-            emitInstruction("beq " + left_reg + ", " + right_reg + ", " + label);
-        } else if (op == "!=") {
-            emitInstruction("bne " + left_reg + ", " + right_reg + ", " + label);
-        }
+        generateConditionalJump(left, op, right, label, local_vars);
         return;
     }
 }
 
-void MIPSGenerator::generateAssignment(const std::string& dest, const std::string& src)
-{
-    std::string dest_reg = getRegisterForVariable(dest);
+// ← FUNCIÓN AUXILIAR PARA DETECTAR LITERALES
+bool MIPSGenerator::isLiteral(const std::string& var) {
+    if (var.empty()) return false;
     
+    // Verificar si es un número (entero o decimal)
+    if (std::isdigit(var[0]) || (var[0] == '-' && var.length() > 1 && std::isdigit(var[1]))) {
+        return true;
+    }
+    
+    // Verificar si es un string literal (empieza con "str")
+    if (var.find("str") == 0) {
+        return true;
+    }
+    
+    return false;
+}
+
+// ← NUEVAS IMPLEMENTACIONES CON MANEJO SEGURO DE VARIABLES
+void MIPSGenerator::generateAssignment(const std::string& dest, const std::string& src,
+                                     const std::unordered_map<std::string, int>& local_vars)
+{
     // Si src es un número literal
-    if (std::isdigit(src[0]) || (src[0] == '-' && std::isdigit(src[1]))) {
-        emitInstruction("li " + dest_reg + ", " + src);
+    if (isLiteral(src)) {
+        emitInstruction("li $t0, " + src.substr(0, src.find('.')));  // Truncar decimales para MIPS
+        emitInstruction("sw $t0, " + std::to_string(local_vars.at(dest)) + "($fp)");
     }
     // Si src es una etiqueta de string
     else if (string_labels.find(src) != string_labels.end()) {
-        emitInstruction("la " + dest_reg + ", " + src);
+        emitInstruction("la $t0, " + src);
+        emitInstruction("sw $t0, " + std::to_string(local_vars.at(dest)) + "($fp)");
     }
     // Si src es otra variable
+    else if (local_vars.find(src) != local_vars.end()) {
+        emitInstruction("lw $t0, " + std::to_string(local_vars.at(src)) + "($fp)");
+        emitInstruction("sw $t0, " + std::to_string(local_vars.at(dest)) + "($fp)");
+    }
     else {
-        std::string src_reg = getRegisterForVariable(src);
-        emitInstruction("move " + dest_reg + ", " + src_reg);
+        // Variable no encontrada, asignar 0
+        emitComment("Warning: Variable " + src + " not found, assigning 0");
+        emitInstruction("li $t0, 0");
+        emitInstruction("sw $t0, " + std::to_string(local_vars.at(dest)) + "($fp)");
     }
 }
 
 void MIPSGenerator::generateBinaryOp(const std::string& dest, const std::string& left,
-                                    const std::string& op, const std::string& right)
+                                    const std::string& op, const std::string& right,
+                                    const std::unordered_map<std::string, int>& local_vars)
 {
-    std::string dest_reg = getRegisterForVariable(dest);
-    std::string left_reg = getRegisterForVariable(left);
-    std::string right_reg = getRegisterForVariable(right);
-    
-    if (op == "+") {
-        emitInstruction("add " + dest_reg + ", " + left_reg + ", " + right_reg);
-    } else if (op == "-") {
-        emitInstruction("sub " + dest_reg + ", " + left_reg + ", " + right_reg);
-    } else if (op == "*") {
-        emitInstruction("mul " + dest_reg + ", " + left_reg + ", " + right_reg);
-    } else if (op == "/") {
-        emitInstruction("div " + left_reg + ", " + right_reg);
-        emitInstruction("mflo " + dest_reg);
+    // Cargar operando izquierdo
+    if (isLiteral(left)) {
+        emitInstruction("li $t0, " + left.substr(0, left.find('.')));
+    } else if (local_vars.find(left) != local_vars.end()) {
+        emitInstruction("lw $t0, " + std::to_string(local_vars.at(left)) + "($fp)");
+    } else {
+        emitComment("Warning: Left operand " + left + " not found");
+        emitInstruction("li $t0, 0");
     }
+    
+    // Cargar operando derecho
+    if (isLiteral(right)) {
+        emitInstruction("li $t1, " + right.substr(0, right.find('.')));
+    } else if (local_vars.find(right) != local_vars.end()) {
+        emitInstruction("lw $t1, " + std::to_string(local_vars.at(right)) + "($fp)");
+    } else {
+        emitComment("Warning: Right operand " + right + " not found");
+        emitInstruction("li $t1, 0");
+    }
+    
+    // Generar operación
+    if (op == "+") {
+        emitInstruction("add $t2, $t0, $t1");
+    } else if (op == "-") {
+        emitInstruction("sub $t2, $t0, $t1");
+    } else if (op == "*") {
+        emitInstruction("mul $t2, $t0, $t1");
+    } else if (op == "/") {
+        emitInstruction("div $t0, $t1");
+        emitInstruction("mflo $t2");
+    } else if (op == "<=") {
+        emitInstruction("sle $t2, $t0, $t1");
+    } else if (op == "<") {
+        emitInstruction("slt $t2, $t0, $t1");
+    } else if (op == ">=") {
+        emitInstruction("sge $t2, $t0, $t1");
+    } else if (op == ">") {
+        emitInstruction("sgt $t2, $t0, $t1");
+    } else if (op == "==") {
+        emitInstruction("seq $t2, $t0, $t1");
+    } else if (op == "!=") {
+        emitInstruction("sne $t2, $t0, $t1");
+    }
+    
+    // Almacenar resultado
+    emitInstruction("sw $t2, " + std::to_string(local_vars.at(dest)) + "($fp)");
 }
 
 void MIPSGenerator::generateFunctionCall(const std::string& dest, const std::string& func,
-                                       const std::vector<std::string>& args)
+                                       const std::vector<std::string>& args,
+                                       const std::unordered_map<std::string, int>& local_vars)
 {
     // Pasar argumentos en registros $a0-$a3
     for (size_t i = 0; i < args.size() && i < 4; i++) {
-        std::string arg_reg = getRegisterForVariable(args[i]);
-        emitInstruction("move $a" + std::to_string(i) + ", " + arg_reg);
+        if (isLiteral(args[i])) {
+            emitInstruction("li $a" + std::to_string(i) + ", " + args[i].substr(0, args[i].find('.')));
+        } else if (local_vars.find(args[i]) != local_vars.end()) {
+            emitInstruction("lw $a" + std::to_string(i) + ", " + 
+                          std::to_string(local_vars.at(args[i])) + "($fp)");
+        } else if (string_labels.find(args[i]) != string_labels.end()) {
+            emitInstruction("la $a" + std::to_string(i) + ", " + args[i]);
+        } else {
+            emitComment("Warning: Argument " + args[i] + " not found");
+            emitInstruction("li $a" + std::to_string(i) + ", 0");
+        }
     }
     
     // Llamadas a funciones nativas
     if (func == "print") {
-        generatePrint(args.empty() ? "" : args[0]);
+        generatePrint(args.empty() ? "" : args[0], local_vars);
     } else {
         // Llamada a función definida por usuario
         emitInstruction("jal " + func);
         
-        // Mover resultado a registro destino
+        // Mover resultado a variable destino
         if (!dest.empty()) {
-            std::string dest_reg = getRegisterForVariable(dest);
-            emitInstruction("move " + dest_reg + ", $v0");
+            emitInstruction("sw $v0, " + std::to_string(local_vars.at(dest)) + "($fp)");
         }
     }
 }
 
-void MIPSGenerator::generatePrint(const std::string& value)
+void MIPSGenerator::generatePrint(const std::string& value,
+                                const std::unordered_map<std::string, int>& local_vars)
 {
-    std::string value_reg = getRegisterForVariable(value);
-    
     // Verificar si es string o número
     if (string_labels.find(value) != string_labels.end()) {
         // Imprimir string
-        emitInstruction("move $a0, " + value_reg);
+        emitInstruction("la $a0, " + value);
         emitInstruction("li $v0, 4");  // print_str syscall
         emitInstruction("syscall");
     } else {
-        // Imprimir entero
-        emitInstruction("move $a0, " + value_reg);
+        // Cargar valor y imprimir entero
+        if (isLiteral(value)) {
+            emitInstruction("li $a0, " + value.substr(0, value.find('.')));
+        } else if (local_vars.find(value) != local_vars.end()) {
+            emitInstruction("lw $a0, " + std::to_string(local_vars.at(value)) + "($fp)");
+        } else {
+            emitComment("Warning: Print value " + value + " not found");
+            emitInstruction("li $a0, 0");
+        }
         emitInstruction("li $v0, 1");  // print_int syscall
         emitInstruction("syscall");
     }
@@ -317,35 +459,74 @@ void MIPSGenerator::generatePrint(const std::string& value)
     emitInstruction("syscall");
 }
 
-void MIPSGenerator::generateReturn(const std::string& value)
+void MIPSGenerator::generateReturn(const std::string& value,
+                                 const std::unordered_map<std::string, int>& local_vars)
 {
     if (!value.empty()) {
-        std::string value_reg = getRegisterForVariable(value);
-        emitInstruction("move $v0, " + value_reg);
+        if (isLiteral(value)) {
+            emitInstruction("li $v0, " + value.substr(0, value.find('.')));
+        } else if (local_vars.find(value) != local_vars.end()) {
+            emitInstruction("lw $v0, " + std::to_string(local_vars.at(value)) + "($fp)");
+        } else {
+            emitComment("Warning: Return value " + value + " not found");
+            emitInstruction("li $v0, 0");
+        }
     }
 }
 
+void MIPSGenerator::generateConditionalJump(const std::string& left, const std::string& op, 
+                                           const std::string& right, const std::string& label,
+                                           const std::unordered_map<std::string, int>& local_vars)
+{
+    // Cargar operando izquierdo
+    if (isLiteral(left)) {
+        emitInstruction("li $t0, " + left.substr(0, left.find('.')));
+    } else if (local_vars.find(left) != local_vars.end()) {
+        emitInstruction("lw $t0, " + std::to_string(local_vars.at(left)) + "($fp)");
+    } else {
+        emitComment("Warning: Left operand " + left + " not found");
+        emitInstruction("li $t0, 0");
+    }
+    
+    // Cargar operando derecho
+    if (isLiteral(right)) {
+        emitInstruction("li $t1, " + right.substr(0, right.find('.')));
+    } else if (local_vars.find(right) != local_vars.end()) {
+        emitInstruction("lw $t1, " + std::to_string(local_vars.at(right)) + "($fp)");
+    } else {
+        emitComment("Warning: Right operand " + right + " not found");
+        emitInstruction("li $t1, 0");
+    }
+    
+    // Generar salto condicional
+    if (op == "==") {
+        emitInstruction("beq $t0, $t1, " + label);
+    } else if (op == "!=") {
+        emitInstruction("bne $t0, $t1, " + label);
+    } else if (op == "<") {
+        emitInstruction("blt $t0, $t1, " + label);
+    } else if (op == "<=") {
+        emitInstruction("ble $t0, $t1, " + label);
+    } else if (op == ">") {
+        emitInstruction("bgt $t0, $t1, " + label);
+    } else if (op == ">=") {
+        emitInstruction("bge $t0, $t1, " + label);
+    }
+}
+
+// ← MÉTODOS AUXILIARES ACTUALIZADOS
 std::string MIPSGenerator::getRegisterForVariable(const std::string& var)
 {
-    if (variable_registers.find(var) == variable_registers.end()) {
-        // Asignar nuevo registro temporal
-        if (next_temp_reg < static_cast<int>(temp_registers.size())) {  
-            variable_registers[var] = temp_registers[next_temp_reg++];
-        } else {
-            // Si no hay más registros temporales, usar stack
-            variable_registers[var] = "stack_" + std::to_string(stack_offset);
-            stack_offset += 4;
-        }
-    }
-    return variable_registers[var];
+    // Esta función ya no se usa con el nuevo enfoque de stack frames
+    return "$t0";
 }
 
 std::string MIPSGenerator::getNextTempRegister()
 {
-    if (next_temp_reg < static_cast<int>(temp_registers.size())) {  // ← AGREGAR CAST
+    if (next_temp_reg < static_cast<int>(temp_registers.size())) {
         return temp_registers[next_temp_reg++];
     }
-    return "$t0"; // Fallback
+    return "$t0";
 }
 
 void MIPSGenerator::emitInstruction(const std::string& instruction)

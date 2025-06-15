@@ -8,8 +8,7 @@
 #include "PrintVisitor/print_visitor.hpp"
 #include "Value/value.hpp"
 #include "CodeGen/cil_generator.hpp"
-#include "CodeGen/cil_interpreter.hpp"
-#include "CodeGen/mips_generator.hpp"  // ← NUEVO INCLUDE
+#include "CodeGen/mips_generator.hpp"  
 
 extern FILE *yyin;
 extern int yyparse();

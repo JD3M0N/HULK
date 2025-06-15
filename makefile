@@ -14,7 +14,6 @@ MAIN_SRC         = src/main.cpp
 TYPE_SRC         = src/Type/type.cpp
 TYPEINF_SRC      = src/Type/type_inferer.cpp
 CODEGEN_SRC      = src/CodeGen/cil_generator.cpp
-CILINTER_SRC     = src/CodeGen/cil_interpreter.cpp
 MIPSGEN_SRC      = src/CodeGen/mips_generator.cpp
 
 # Objetos resultantes
@@ -25,7 +24,6 @@ OBJS = \
   $(TYPE_SRC:.cpp=.o)     \
   $(TYPEINF_SRC:.cpp=.o)  \
   $(CODEGEN_SRC:.cpp=.o)  \
-  $(CILINTER_SRC:.cpp=.o) \
   $(MIPSGEN_SRC:.cpp=.o)
 
 

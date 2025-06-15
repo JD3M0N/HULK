@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <iostream>
+#include <fstream>
 
 #include "AST/ast.hpp"
 #include "Scope/name_resolver.hpp"
@@ -8,6 +9,7 @@
 #include "Value/value.hpp"
 #include "CodeGen/cil_generator.hpp"
 #include "CodeGen/cil_interpreter.hpp"
+#include "CodeGen/mips_generator.hpp"  // ← NUEVO INCLUDE
 
 extern FILE *yyin;
 extern int yyparse();
@@ -22,10 +24,13 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    FILE *file = std::fopen(argv[1], "r");
+    std::string input_file = argv[1];
+    
+
+    FILE *file = std::fopen(input_file.c_str(), "r");
     if (!file)
     {
-        std::cerr << "No se pudo abrir el archivo: " << argv[1] << "\n";
+        std::cerr << "No se pudo abrir el archivo: " << input_file << "\n";
         return 1;
     }
     yyin = file;
@@ -89,20 +94,43 @@ int main(int argc, char *argv[])
         return 5;
     }
 
-    // 6) Ejecución del código CIL
-    std::cout << "\n=== Ejecucion CIL ===\n";
-    try
-    {
-        CILInterpreter interpreter;
-        interpreter.loadProgram(cilCode);
-        interpreter.execute();
+    // 6) Generación de MIPS (opcional)
+    
+    std::cout << "\n=== Generacion de Codigo MIPS ===\n";
+    try {
+        MIPSGenerator mipsGen;
+        std::string mipsCode = mipsGen.generateMIPS(cilCode);
+            
+        // Guardar en archivo .s
+        std::string output_file = input_file.substr(0, input_file.find_last_of('.')) + ".s";
+        std::ofstream mips_file(output_file);
+        mips_file << mipsCode;
+        mips_file.close();
+            
+        std::cout << "Código MIPS generado en: " << output_file << std::endl;
+        std::cout << "\n" << mipsCode << std::endl;
     }
-    catch (const std::exception &e)
-    {
-        std::cerr << "Error en ejecución CIL: " << e.what() << "\n";
+    catch (const std::exception &e) {
+        std::cerr << "Error en generación MIPS: " << e.what() << "\n";
         std::fclose(file);
-        return 6;
+        return 7;
     }
+    
+    // // 7) Ejecución del código CIL (comportamiento original)
+    // std::cout << "\n=== Ejecucion CIL ===\n";
+    // try
+    // {
+    //     CILInterpreter interpreter;
+    //     interpreter.loadProgram(cilCode);
+    //     interpreter.execute();
+    // }
+    // catch (const std::exception &e)
+    // {
+    //     std::cerr << "Error en ejecución CIL: " << e.what() << "\n";
+    //     std::fclose(file);
+    //     return 6;
+    // }
+    
 
     fclose(file);
     return 0;

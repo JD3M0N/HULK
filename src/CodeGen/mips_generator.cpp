@@ -178,14 +178,12 @@ void MIPSGenerator::translateCILInstruction(const std::string& line,
             !isLiteral(var) && 
             string_labels.find(var) == string_labels.end()) {
             
-            // Layout FIJO del stack frame [4..60]
-            if (var == "result" || var == "sum") {
-                local_vars[var] = 12;
-            } else if (var == "i" || var == "current") {
-                local_vars[var] = 16;
-            } else if (var == "n") {
-                local_vars[var] = 4;  // primer argumento
-            } else if (var == "start") {
+            // ❌ PROBLEMA: Layout FIJO causa colisiones
+            // ✅ SOLUCIÓN: Offsets únicos incrementales
+            
+            static int next_offset = 0;  // ← NUEVO: Contador de offsets
+            
+            if (var == "n" || var == "start") {
                 local_vars[var] = 4;  // primer argumento
             } else if (var == "end") {
                 local_vars[var] = 8;  // segundo argumento
@@ -194,8 +192,9 @@ void MIPSGenerator::translateCILInstruction(const std::string& line,
                 emitComment("Temporal " + var + " managed in registers only");
                 return;  // NO agregarlo a local_vars
             } else {
-                // Otras variables empiezan desde offset 20
-                local_vars[var] = 20;
+                // ✅ ASIGNAR OFFSETS ÚNICOS PARA CADA VARIABLE
+                next_offset += 4;  // Incrementar por cada nueva variable
+                local_vars[var] = 12 + next_offset;  // Empezar desde 12, incrementar
             }
             
             emitComment("Variable " + var + " at offset " + std::to_string(local_vars[var]));

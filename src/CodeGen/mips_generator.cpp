@@ -352,7 +352,12 @@ void MIPSGenerator::translateCILInstruction(const std::string& line,
         if (clean_line.length() > 6) {
             value = clean_line.substr(7);
             
-            if (isLiteral(value)) {
+            
+            if (value.find("t") == 0) {
+                // Si es un temporal, usar el último resultado en $t2
+                emitComment("Returning temporal result from $t2");
+                emitInstruction("move $v0, $t2");
+            } else if (isLiteral(value)) {
                 std::string int_value = value.substr(0, value.find('.'));
                 emitInstruction("li $v0, " + int_value);
             } else if (local_vars.find(value) != local_vars.end()) {

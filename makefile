@@ -18,18 +18,22 @@ MIPSGEN_SRC      = src/CodeGen/mips_generator.cpp
 
 # Objetos resultantes
 OBJS = \
-  $(PARSER_GEN_CPP:.cpp=.o) \
-  $(LEXER_GEN:.cpp=.o)    \
-  $(MAIN_SRC:.cpp=.o)     \
-  $(TYPE_SRC:.cpp=.o)     \
-  $(TYPEINF_SRC:.cpp=.o)  \
-  $(CODEGEN_SRC:.cpp=.o)  \
-  $(MIPSGEN_SRC:.cpp=.o)
+	$(PARSER_GEN_CPP:.cpp=.o) \
+	$(LEXER_GEN:.cpp=.o)    \
+	$(MAIN_SRC:.cpp=.o)     \
+	$(TYPE_SRC:.cpp=.o)     \
+	$(TYPEINF_SRC:.cpp=.o)  \
+	$(CODEGEN_SRC:.cpp=.o)  \
+	$(MIPSGEN_SRC:.cpp=.o)
 
-
-# Ejecutable
+# Ejecutable del compilador HULK
 BIN_DIR    = hulk
 EXECUTABLE = $(BIN_DIR)/hulk_executable
+
+# Ruta a MARS (jar dentro de la carpeta MARS-main en la raíz)
+MARS_JAR   = MARS-main/Mars.jar
+
+.PHONY: all execute clean distclean
 
 # Target por defecto
 all: $(EXECUTABLE)
@@ -46,7 +50,7 @@ $(LEXER_GEN): $(LEXER_SRC) $(PARSER_GEN_HPP)
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# 4) Linkear todos los objetos, incluido main.o
+# 4) Linkear todos los objetos
 $(EXECUTABLE): $(PARSER_GEN_CPP) $(LEXER_GEN) $(OBJS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(OBJS) -o $@
 
@@ -54,13 +58,16 @@ $(EXECUTABLE): $(PARSER_GEN_CPP) $(LEXER_GEN) $(OBJS) | $(BIN_DIR)
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
-# Ejecutar con un script de prueba
+# Ejecutar: genera script.s desde script.hulk y lo lanza con MARS
+# @echo "→ Generando MIPS assembly (script.s)"
 execute: all
-	./$(EXECUTABLE) script.hulk
+	@./$(EXECUTABLE) script.hulk
+	@echo " Ejecutando script.s con MARS"
+	@java -jar "$(MARS_JAR)" script.s
 
 # Limpieza de objetos y generados
 clean:
-	rm -f $(OBJS) $(LEXER_GEN) $(PARSER_GEN_CPP) $(PARSER_GEN_HPP) $(EXECUTABLE)
+	rm -f $(OBJS) $(LEXER_GEN) $(PARSER_GEN_CPP) $(PARSER_GEN_HPP) $(EXECUTABLE) script.s
 
 # Limpieza total (incluye carpeta de binarios)
 distclean: clean

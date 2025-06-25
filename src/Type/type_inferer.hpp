@@ -27,7 +27,13 @@ public:
     void visit(ExprBlock *expr) override;
     void visit(WhileExpr *expr) override;
 
+    void visit(NewExpr *expr) override;
+    void visit(SelfExpr *expr) override;
+    void visit(BaseExpr *expr) override;
+    void visit(MemberAccessExpr *expr) override;
+
     // StmtVisitor
     void visit(ExprStmt *stmt) override;
     void visit(FunctionDecl *stmt) override;
+    void visit(ClassDecl *decl) override;
 };

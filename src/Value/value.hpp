@@ -8,7 +8,6 @@
 #include <memory>
 #include <sstream>
 #include <string>
-#include <variant>
 
 class RangeValue;
 class RangeIterator;
@@ -30,89 +29,141 @@ struct ObjectValue
         : fields(std::move(f)), klass(k) {}
 };
 
-
 class Value
 {
 public:
-    using Storage = std::variant<double, std::string, bool, std::shared_ptr<RangeValue>,
-                                 std::shared_ptr<RangeIterator>,
-                                 ObjectPtr>;
+    // Tipo para identificar qué valor está activo en la unión
+    enum class ValueType {
+        NUMBER,
+        STRING,
+        BOOLEAN,
+        RANGE,
+        ITERATOR,
+        OBJECT
+    };
 
-    Value() : val(0.0) {}
-    Value(double d) : val(d) {}
-    Value(const std::string &s) : val(s) {}
-    Value(bool b) : val(b) {}
-    Value(std::shared_ptr<RangeValue> rv) : val(rv) {}
-    Value(std::shared_ptr<RangeIterator> it) : val(it) {}
-    Value(ObjectPtr obj) : val(std::move(obj)) {}
-
-    ~Value() = default;
-
-    bool
-    isNumber() const
-    {
-        return std::holds_alternative<double>(val);
+    Value() : type(ValueType::NUMBER) { 
+        new (&data.number) double(0.0);
     }
-    bool
-    isString() const
-    {
-        return std::holds_alternative<std::string>(val);
+    
+    Value(double d) : type(ValueType::NUMBER) {
+        new (&data.number) double(d);
     }
-    bool
-    isBool() const
-    {
-        return std::holds_alternative<bool>(val);
+    
+    Value(const std::string &s) : type(ValueType::STRING) {
+        new (&data.string_buffer) std::string(s);
     }
-    bool
-    isRange() const
-    {
-        return std::holds_alternative<std::shared_ptr<RangeValue>>(val);
+    
+    Value(bool b) : type(ValueType::BOOLEAN) {
+        new (&data.boolean) bool(b);
     }
-    bool
-    isIterable() const
-    {
-        return std::holds_alternative<std::shared_ptr<RangeIterator>>(val);
+    
+    Value(std::shared_ptr<RangeValue> rv) : type(ValueType::RANGE) {
+        new (&data.range_buffer) std::shared_ptr<RangeValue>(rv);
+    }
+    
+    Value(std::shared_ptr<RangeIterator> it) : type(ValueType::ITERATOR) {
+        new (&data.iterator_buffer) std::shared_ptr<RangeIterator>(it);
+    }
+    
+    Value(ObjectPtr obj) : type(ValueType::OBJECT) {
+        new (&data.object_buffer) ObjectPtr(std::move(obj));
     }
 
-    bool isObject() const 
-    {
-        return std::holds_alternative<ObjectPtr>(val); 
+    // Constructor de copia
+    Value(const Value& other) : type(other.type) {
+        switch (type) {
+            case ValueType::NUMBER:
+                new (&data.number) double(other.data.number);
+                break;
+            case ValueType::STRING:
+                new (&data.string_buffer) std::string(*reinterpret_cast<const std::string*>(&other.data.string_buffer));
+                break;
+            case ValueType::BOOLEAN:
+                new (&data.boolean) bool(other.data.boolean);
+                break;
+            case ValueType::RANGE:
+                new (&data.range_buffer) std::shared_ptr<RangeValue>(*reinterpret_cast<const std::shared_ptr<RangeValue>*>(&other.data.range_buffer));
+                break;
+            case ValueType::ITERATOR:
+                new (&data.iterator_buffer) std::shared_ptr<RangeIterator>(*reinterpret_cast<const std::shared_ptr<RangeIterator>*>(&other.data.iterator_buffer));
+                break;
+            case ValueType::OBJECT:
+                new (&data.object_buffer) ObjectPtr(*reinterpret_cast<const ObjectPtr*>(&other.data.object_buffer));
+                break;
+        }
     }
 
-    ObjectPtr 
-    asObject() const 
-    {
-        return std::get<ObjectPtr>(val); 
+    // Operador de asignación
+    Value& operator=(const Value& other) {
+        if (this != &other) {
+            this->~Value();
+            new (this) Value(other);
+        }
+        return *this;
     }
 
-    double
-    asNumber() const
-    {
-        return std::get<double>(val);
+    // Destructor
+    ~Value() {
+        switch (type) {
+            case ValueType::STRING:
+                reinterpret_cast<std::string*>(&data.string_buffer)->~basic_string();
+                break;
+            case ValueType::RANGE:
+                reinterpret_cast<std::shared_ptr<RangeValue>*>(&data.range_buffer)->~shared_ptr();
+                break;
+            case ValueType::ITERATOR:
+                reinterpret_cast<std::shared_ptr<RangeIterator>*>(&data.iterator_buffer)->~shared_ptr();
+                break;
+            case ValueType::OBJECT:
+                reinterpret_cast<ObjectPtr*>(&data.object_buffer)->~shared_ptr();
+                break;
+            default:
+                break; // No necesita destrucción manual
+        }
     }
-    const std::string &
-    asString() const
-    {
-        return std::get<std::string>(val);
+
+    bool isNumber() const { return type == ValueType::NUMBER; }
+    bool isString() const { return type == ValueType::STRING; }
+    bool isBool() const { return type == ValueType::BOOLEAN; }
+    bool isRange() const { return type == ValueType::RANGE; }
+    bool isIterable() const { return type == ValueType::ITERATOR; }
+    bool isObject() const { return type == ValueType::OBJECT; }
+
+    ObjectPtr asObject() const {
+        if (!isObject())
+            throw std::runtime_error("Value no es ObjectPtr");
+        return *reinterpret_cast<const ObjectPtr*>(&data.object_buffer);
     }
-    bool
-    asBool() const
-    {
-        return std::get<bool>(val);
+
+    double asNumber() const {
+        if (!isNumber())
+            throw std::runtime_error("Value no es número");
+        return data.number;
     }
-    std::shared_ptr<RangeValue>
-    asRange() const
-    {
+
+    const std::string& asString() const {
+        if (!isString())
+            throw std::runtime_error("Value no es string");
+        return *reinterpret_cast<const std::string*>(&data.string_buffer);
+    }
+
+    bool asBool() const {
+        if (!isBool())
+            throw std::runtime_error("Value no es boolean");
+        return data.boolean;
+    }
+
+    std::shared_ptr<RangeValue> asRange() const {
         if (!isRange())
             throw std::runtime_error("Value no es RangeValue");
-        return std::get<std::shared_ptr<RangeValue>>(val);
+        return *reinterpret_cast<const std::shared_ptr<RangeValue>*>(&data.range_buffer);
     }
-    std::shared_ptr<RangeIterator>
-    asIterable() const
-    {
+
+    std::shared_ptr<RangeIterator> asIterable() const {
         if (!isIterable())
             throw std::runtime_error("Value no es RangeIterator");
-        return std::get<std::shared_ptr<RangeIterator>>(val);
+        return *reinterpret_cast<const std::shared_ptr<RangeIterator>*>(&data.iterator_buffer);
     }
 
     std::string
@@ -166,8 +217,22 @@ public:
     }
 
 private:
-    Storage val;
-    friend std::ostream &operator<<(std::ostream &os, const Value &v);
+    ValueType type;
+    
+    // Unión para almacenar los distintos tipos
+    union Data {
+        double number;
+        char string_buffer[sizeof(std::string)];
+        bool boolean;
+        char range_buffer[sizeof(std::shared_ptr<RangeValue>)];
+        char iterator_buffer[sizeof(std::shared_ptr<RangeIterator>)];
+        char object_buffer[sizeof(ObjectPtr)];
+        
+        Data() {} // Constructor por defecto vacío
+        ~Data() {} // Destructor vacío
+    } data;
+    
+    friend std::ostream& operator<<(std::ostream& os, const Value& v);
 };
 
 inline std::ostream &

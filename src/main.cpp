@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <iostream>
+#include <fstream> // Incluir fstream para manejo de archivos
 
 #include "AST/ast.hpp"
 #include "Scope/name_resolver.hpp"
@@ -27,6 +28,11 @@ int main(int argc, char *argv[])
         [&reporter](const Error &error)
         {
             reporter.report(error);
+            // Opcional: Guardar errores en un archivo de log
+            static std::ofstream errorLog("error_log.txt", std::ios::app);
+            if (errorLog.is_open()) {
+                errorLog << error.getFullMessage() << std::endl;
+            }
         }
     );
 
@@ -97,9 +103,6 @@ int main(int argc, char *argv[])
     //     stmt->accept(&evaluator);
 
     fclose(file);
-
-    // Limpia el sistema de errores al finalizar
-    ErrorManager::destroy();
 
     return 0;
 }

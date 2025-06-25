@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <fstream>
 #include "error.hpp"
 
 class ErrorReporter {
@@ -45,6 +46,36 @@ public:
     
     void setUseColors(bool use) {
         useColors = use;
+    }
+    
+    void reportWithContext(const Error& error, const std::string& filename) {
+        // Primero reportamos el error normal
+        report(error);
+        
+        // Si tenemos información de ubicación, mostramos contexto
+        if (error.getLocation().line > 0) {
+            std::ifstream file(filename);
+            if (file.is_open()) {
+                std::string line;
+                int lineNum = 1;
+                // Buscar la línea del error
+                while (getline(file, line) && lineNum < error.getLocation().line) {
+                    lineNum++;
+                }
+                
+                if (lineNum == error.getLocation().line) {
+                    // Mostrar la línea con el error
+                    output << getColorCode(error.getLevel());
+                    output << "Línea " << lineNum << ": " << line << std::endl;
+                    
+                    // Mostrar un indicador debajo de la posición del error
+                    if (error.getLocation().column > 0) {
+                        output << std::string(8 + std::to_string(lineNum).length() + error.getLocation().column, ' ') << "^" << std::endl;
+                    }
+                    output << resetColor() << std::endl;
+                }
+            }
+        }
     }
 };
 

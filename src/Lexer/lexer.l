@@ -8,6 +8,7 @@
 #include <iostream>
 #include <cstring>
 #include <string>
+#include "lexer_fixes.hpp" 
 
 #include "../AST/ast.hpp"
 #include "../Parser/parser.tab.hpp"
@@ -67,12 +68,25 @@ TokenLocation current_location;
     if (strcmp(yytext, "type")     == 0) return TYPE;
     if (strcmp(yytext, "inherits") == 0) return INHERITS;
     if (strcmp(yytext, "new")      == 0) return NEW;
-    if (strcmp(yytext, "self")     == 0) { yylval.str = strdup("self"); return SELF; }
-    if (strcmp(yytext, "base")     == 0) { yylval.str = strdup("base"); return BASE; }    
+    if (strcmp(yytext, "self")     == 0) { 
+        size_t len = strlen("self") + 1;
+        yylval.str = (char*)malloc(len);
+        if (yylval.str) strcpy(yylval.str, "self");
+        return SELF; 
+    }
+    if (strcmp(yytext, "base")     == 0) { 
+        size_t len = strlen("base") + 1;
+        yylval.str = (char*)malloc(len);
+        if (yylval.str) strcpy(yylval.str, "base");
+        return BASE; 
+    }    
 
 
     // Si no es ninguna palabra reservada, entonces es IDENT
-    yylval.str = strdup(yytext);
+    size_t len = strlen(yytext) + 1;
+    yylval.str = (char*)malloc(len);
+    if (yylval.str) strcpy(yylval.str, yytext);
+
     return IDENT;
 }
 

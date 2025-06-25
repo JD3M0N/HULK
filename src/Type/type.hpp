@@ -25,31 +25,14 @@ struct Type
     Type(TypeKind k) : kind(k) {}
     Type(TypeKind k, const std::string &n) : kind(k), name(n) {}
 
-    static std::shared_ptr<Type> makeNumber()
-    {
-        return std::make_shared<Type>(TypeKind::NUMBER);
-    }
-    static std::shared_ptr<Type> makeString()
-    {
-        return std::make_shared<Type>(TypeKind::STRING);
-    }
-    static std::shared_ptr<Type> makeBoolean()
-    {
-        return std::make_shared<Type>(TypeKind::BOOLEAN);
-    }
-    static std::shared_ptr<Type> makeVar()
-    {
-        return std::make_shared<Type>(TypeKind::TVAR);
-    }
-    static std::shared_ptr<Type> makeFunction(
-        std::vector<std::shared_ptr<Type>> ps,
-        std::shared_ptr<Type> ret)
-    {
-        auto t = std::make_shared<Type>(TypeKind::FUNCTION);
-        t->params = std::move(ps);
-        t->retType = std::move(ret);
-        return t;
-    }
+    // Métodos factory estáticos
+    static std::shared_ptr<Type> makeNumber();
+    static std::shared_ptr<Type> makeString();
+    static std::shared_ptr<Type> makeBoolean();
+    static std::shared_ptr<Type> makeVar();
+    static std::shared_ptr<Type> makeFunction(const std::vector<std::shared_ptr<Type>>& params,
+                                            std::shared_ptr<Type> ret);
+    static std::shared_ptr<Type> makeObject(const std::string& className);
 };
 
 // Operaciones de unificación y LUB

@@ -138,6 +138,44 @@ void TypeInfererVisitor::visit(WhileExpr *expr)
     expr->inferredType = last ? last->expr->inferredType : Type::makeBoolean();
 }
 
+// -- Para soportar objetos
+void TypeInfererVisitor::visit(NewExpr *expr) {
+    // Procesar argumentos del constructor
+    for (auto &arg : expr->args) {
+        arg->accept(this);
+    }
+    // Asignar tipo de objeto
+    expr->inferredType = Type::makeObject(expr->typeName);
+}
+
+void TypeInfererVisitor::visit(SelfExpr *expr) {
+    // Self se refiere al tipo de la clase actual
+    expr->inferredType = Type::makeObject("Self");
+}
+
+void TypeInfererVisitor::visit(BaseExpr *expr) {
+    // Base se refiere al tipo de la clase padre
+    expr->inferredType = Type::makeObject("Base");
+}
+
+void TypeInfererVisitor::visit(MemberAccessExpr *expr) {
+    expr->object->accept(this);
+    // Por ahora asignamos un tipo variable
+    expr->inferredType = Type::makeVar();
+}
+
+void TypeInfererVisitor::visit(ClassDecl *decl) {
+    // Procesar atributos
+    for (auto &attr : decl->attributes) {
+        attr.second->accept(this);
+    }
+    
+    // Procesar métodos
+    for (auto &method : decl->methods) {
+        method->accept(this);
+    }
+}
+
 // -- StmtVisitor --
 void TypeInfererVisitor::visit(ExprStmt *stmt)
 {

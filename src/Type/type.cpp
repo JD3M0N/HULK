@@ -51,5 +51,34 @@ std::shared_ptr<Type> lub(std::shared_ptr<Type> A, std::shared_ptr<Type> B)
         return A;
 
     // en el resto de casos (herencia, mezcla de clases distintas) usamos Object
-    return std::make_shared<Type>(TypeKind::CLASS, "Object");
+    return Type::makeObject("Object");
+}
+
+std::shared_ptr<Type> Type::makeObject(const std::string& className) {
+    return std::make_shared<Type>(TypeKind::CLASS, className);
+}
+
+std::shared_ptr<Type> Type::makeNumber() {
+    return std::make_shared<Type>(TypeKind::NUMBER);
+}
+
+std::shared_ptr<Type> Type::makeString() {
+    return std::make_shared<Type>(TypeKind::STRING);
+}
+
+std::shared_ptr<Type> Type::makeBoolean() {
+    return std::make_shared<Type>(TypeKind::BOOLEAN);
+}
+
+std::shared_ptr<Type> Type::makeVar() {
+    return std::make_shared<Type>(TypeKind::TVAR);
+}
+
+std::shared_ptr<Type> Type::makeFunction(
+    const std::vector<std::shared_ptr<Type>>& params,
+    std::shared_ptr<Type> ret) {
+    auto fn = std::make_shared<Type>(TypeKind::FUNCTION);
+    fn->params = params;
+    fn->retType = ret;
+    return fn;
 }

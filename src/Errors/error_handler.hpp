@@ -56,32 +56,19 @@ public:
 
 // Singleton para acceso global
 class ErrorManager {
-private:
-    inline static ErrorHandler* instance = nullptr;  // 'inline' permite múltiples definiciones
-    
 public:
     static ErrorHandler& getInstance() {
-        if (!instance) {
-            instance = new ErrorHandler();
-        }
-        return *instance;
+        static ErrorHandler instance;
+        return instance;
     }
     
     static void initialize(bool abort = false, 
                           ErrorLevel minLevel = ErrorLevel::WARNING,
                           std::function<void(const Error&)> callback = nullptr) {
-        if (instance) {
-            delete instance;
-        }
-        instance = new ErrorHandler(abort, minLevel, callback);
+        getInstance() = ErrorHandler(abort, minLevel, callback);
     }
     
-    static void destroy() {
-        if (instance) {
-            delete instance;
-            instance = nullptr;
-        }
-    }
+    // No es necesario un método destroy explícito, ya que la instancia se destruye automáticamente
 };
 
 #endif // ERROR_HANDLER_HPP

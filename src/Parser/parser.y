@@ -1,13 +1,17 @@
 %{
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include <iostream>
-#include <cstdlib>
-#include <cmath>
-#include <cstring>
+#include <vector>
+#include <memory>
 #include "../AST/ast.hpp"
-#include "../PrintVisitor/print_visitor.hpp"
-#include "../Value/value.hpp"
-#include "../Evaluator/evaluator.hpp"
-#include "../Errors/location.hpp"
+
+// Declarar yytext como externo
+extern char* yytext;
+extern int yylineno;
+
+Program *rootAST;
 
 using ExprPtr = std::unique_ptr<Expr>;
 using ProgramPtr = std::unique_ptr<Program>;
@@ -15,10 +19,7 @@ using ProgramPtr = std::unique_ptr<Program>;
 using namespace std;
 extern int yylex();
 extern int yylineno;
-extern int yycolumn; 
 void yyerror(const char* s);
-
-Program* rootAST = nullptr;
 
 
 struct ClassBody {
@@ -189,7 +190,11 @@ stmt:
 ;    
 
 opt_inherits:
-      /* vacío */            { $$ = strdup("Object"); }
+    /* vacío */            { 
+        char* str = new char[strlen("Object") + 1];
+        strcpy(str, "Object");
+        $$ = str; 
+    }
     | INHERITS IDENT        { $$ = $2; }
 ;
 
@@ -476,5 +481,11 @@ argument_list:
 %%
 
 void yyerror(const char* s) {
-    std::cerr << "Parse error: " << s << " at line " << yylineno << std::endl;
+    // Versión mejorada con más contexto
+    std::string mensaje = std::string(s);
+    std::cerr << "Error de sintaxis en linea " << yylineno << ": " << mensaje << std::endl;
+    
+    if (yytext[0] != '\0') {
+        std::cerr << "Cerca del token: '" << yytext << "'" << std::endl;
+    }
 }

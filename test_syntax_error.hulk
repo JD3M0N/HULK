@@ -1,0 +1,22 @@
+type A {
+  foo() => 5;
+}
+
+type B inherits A {
+  foo() => 10;
+}
+
+function bar(x) {
+  if (x > 5) {
+    new A();
+  } else {
+    new B();
+  }; // Missing semicolon intentionally
+}
+
+// Syntax error: missing closing brace
+function brokenSyntax() {
+  print("hello world");
+// Missing closing brace
+
+print(bar(5).foo());

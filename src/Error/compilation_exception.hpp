@@ -5,28 +5,32 @@
 #include <string>
 #include "error_handler.hpp"
 
-class CompilationException : public std::exception {
+class CompilationException : public std::exception
+{
 private:
     ErrorType errorType;
     std::string message;
     SourceLocation location;
-    
+
 public:
-    CompilationException(ErrorType type, const std::string& msg, 
-                        const SourceLocation& loc = SourceLocation())
+    CompilationException(ErrorType type, const std::string &msg,
+                         const SourceLocation &loc = SourceLocation())
         : errorType(type), message(msg), location(loc) {}
-    
-    const char* what() const noexcept override {
+
+    const char *what() const noexcept override
+    {
         return message.c_str();
     }
-    
+
     ErrorType getErrorType() const { return errorType; }
-    const SourceLocation& getLocation() const { return location; }
-    
-    std::string getDetailedMessage() const {
+    const SourceLocation &getLocation() const { return location; }
+
+    std::string getDetailedMessage() const
+    {
         std::string result = "CompilationException: ";
         result += message;
-        if (!location.filename.empty() || location.line > 0) {
+        if (!location.filename.empty() || location.line > 0)
+        {
             result += " at " + location.toString();
         }
         return result;

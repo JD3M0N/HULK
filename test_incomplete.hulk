@@ -1,0 +1,3 @@
+type A {
+  foo() => 5
+// Missing semicolon and closing brace

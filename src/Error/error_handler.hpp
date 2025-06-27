@@ -6,7 +6,8 @@
 #include <iostream>
 #include <sstream>
 
-enum class ErrorType {
+enum class ErrorType
+{
     LEXICAL_ERROR,
     SYNTAX_ERROR,
     SEMANTIC_ERROR,
@@ -17,28 +18,34 @@ enum class ErrorType {
     INTERNAL_ERROR
 };
 
-enum class ErrorSeverity {
+enum class ErrorSeverity
+{
     WARNING,
     ERROR,
     FATAL
 };
 
-struct SourceLocation {
+struct SourceLocation
+{
     std::string filename;
     int line;
     int column;
-    
-    SourceLocation(const std::string& file = "", int ln = 0, int col = 0)
+
+    SourceLocation(const std::string &file = "", int ln = 0, int col = 0)
         : filename(file), line(ln), column(col) {}
-        
-    std::string toString() const {
+
+    std::string toString() const
+    {
         std::stringstream ss;
-        if (!filename.empty()) {
+        if (!filename.empty())
+        {
             ss << filename;
         }
-        if (line > 0) {
+        if (line > 0)
+        {
             ss << ":" << line;
-            if (column > 0) {
+            if (column > 0)
+            {
                 ss << ":" << column;
             }
         }
@@ -46,85 +53,87 @@ struct SourceLocation {
     }
 };
 
-class ErrorMessage {
+class ErrorMessage
+{
 private:
     ErrorType type;
     ErrorSeverity severity;
     std::string message;
     SourceLocation location;
-    std::string context;  // Línea de código donde ocurrió el error
-    
+    std::string context; // Línea de código donde ocurrió el error
+
 public:
-    ErrorMessage(ErrorType t, ErrorSeverity s, const std::string& msg, 
-                 const SourceLocation& loc = SourceLocation(), 
-                 const std::string& ctx = "")
+    ErrorMessage(ErrorType t, ErrorSeverity s, const std::string &msg,
+                 const SourceLocation &loc = SourceLocation(),
+                 const std::string &ctx = "")
         : type(t), severity(s), message(msg), location(loc), context(ctx) {}
-    
+
     // Getters
     ErrorType getType() const { return type; }
     ErrorSeverity getSeverity() const { return severity; }
-    const std::string& getMessage() const { return message; }
-    const SourceLocation& getLocation() const { return location; }
-    const std::string& getContext() const { return context; }
-    
+    const std::string &getMessage() const { return message; }
+    const SourceLocation &getLocation() const { return location; }
+    const std::string &getContext() const { return context; }
+
     std::string toString() const;
     std::string getTypeString() const;
     std::string getSeverityString() const;
 };
 
-class ErrorHandler {
+class ErrorHandler
+{
 private:
     std::vector<ErrorMessage> errors;
     int errorCount;
     int warningCount;
     int maxErrors;
     bool shouldAbort;
-    
+
 public:
-    ErrorHandler(int maxErr = 10) : errorCount(0), warningCount(0), 
-                                   maxErrors(maxErr), shouldAbort(false) {}
-    
+    ErrorHandler(int maxErr = 10) : errorCount(0), warningCount(0),
+                                    maxErrors(maxErr), shouldAbort(false) {}
+
     // Métodos para reportar errores
-    void reportError(ErrorType type, const std::string& message, 
-                    const SourceLocation& location = SourceLocation(),
-                    const std::string& context = "");
-                    
-    void reportWarning(ErrorType type, const std::string& message,
-                      const SourceLocation& location = SourceLocation(),
-                      const std::string& context = "");
-                      
-    void reportFatal(ErrorType type, const std::string& message,
-                    const SourceLocation& location = SourceLocation(),
-                    const std::string& context = "");
-    
+    void reportError(ErrorType type, const std::string &message,
+                     const SourceLocation &location = SourceLocation(),
+                     const std::string &context = "");
+
+    void reportWarning(ErrorType type, const std::string &message,
+                       const SourceLocation &location = SourceLocation(),
+                       const std::string &context = "");
+
+    void reportFatal(ErrorType type, const std::string &message,
+                     const SourceLocation &location = SourceLocation(),
+                     const std::string &context = "");
+
     // Métodos de consulta
     bool hasErrors() const { return errorCount > 0; }
     bool hasWarnings() const { return warningCount > 0; }
     bool shouldAbortCompilation() const { return shouldAbort || errorCount >= maxErrors; }
     int getErrorCount() const { return errorCount; }
     int getWarningCount() const { return warningCount; }
-    
+
     // Métodos de salida
-    void printErrors(std::ostream& out = std::cerr) const;
-    void printSummary(std::ostream& out = std::cerr) const;
+    void printErrors(std::ostream &out = std::cerr) const;
+    void printSummary(std::ostream &out = std::cerr) const;
     std::string generateReport() const;
-    
+
     // Configuración
     void setMaxErrors(int max) { maxErrors = max; }
     void clear();
-    
+
     // Métodos de conveniencia para diferentes tipos de errores
-    void lexicalError(const std::string& message, const SourceLocation& loc = SourceLocation(), const std::string& ctx = "");
-    void syntaxError(const std::string& message, const SourceLocation& loc = SourceLocation(), const std::string& ctx = "");
-    void semanticError(const std::string& message, const SourceLocation& loc = SourceLocation(), const std::string& ctx = "");
-    void typeError(const std::string& message, const SourceLocation& loc = SourceLocation(), const std::string& ctx = "");
-    void scopeError(const std::string& message, const SourceLocation& loc = SourceLocation(), const std::string& ctx = "");
-    void codegenError(const std::string& message, const SourceLocation& loc = SourceLocation(), const std::string& ctx = "");
-    void runtimeError(const std::string& message, const SourceLocation& loc = SourceLocation(), const std::string& ctx = "");
-    void internalError(const std::string& message, const SourceLocation& loc = SourceLocation(), const std::string& ctx = "");
-    
+    void lexicalError(const std::string &message, const SourceLocation &loc = SourceLocation(), const std::string &ctx = "");
+    void syntaxError(const std::string &message, const SourceLocation &loc = SourceLocation(), const std::string &ctx = "");
+    void semanticError(const std::string &message, const SourceLocation &loc = SourceLocation(), const std::string &ctx = "");
+    void typeError(const std::string &message, const SourceLocation &loc = SourceLocation(), const std::string &ctx = "");
+    void scopeError(const std::string &message, const SourceLocation &loc = SourceLocation(), const std::string &ctx = "");
+    void codegenError(const std::string &message, const SourceLocation &loc = SourceLocation(), const std::string &ctx = "");
+    void runtimeError(const std::string &message, const SourceLocation &loc = SourceLocation(), const std::string &ctx = "");
+    void internalError(const std::string &message, const SourceLocation &loc = SourceLocation(), const std::string &ctx = "");
+
     // Singleton pattern
-    static ErrorHandler& getInstance();
+    static ErrorHandler &getInstance();
 };
 
 // Macros para facilitar el reporte de errores

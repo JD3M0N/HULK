@@ -2,8 +2,9 @@ type A {
   foo() => 5;
 }
 
+// Error 1: Invalid token
 type B inherits A {
-  foo() => 10;
+  foo() => 10@#$;  // Invalid characters
 }
 
 function bar(x) {
@@ -11,9 +12,5 @@ function bar(x) {
     new A();
   } else {
     new B();
-  };
+  // Error 2: Missing closing brace and semicolon
 }
-
-print(bar(5).foo());
-print(bar(6).foo());
-

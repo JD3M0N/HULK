@@ -22,4 +22,15 @@ function g(x, y) => {
     }; 
 };
 
-let a  = new A() in print(a.foo());
+function f(a: Number, b): Number {
+    print(a + b);
+}
+
+type Point {
+    x: Number = 0;
+    y: Number = 0;
+
+    getX() => self.x;
+}
+
+let pt = new Point() in print(pt.getX());

@@ -77,6 +77,7 @@ TokenLocation current_location;
 }
 
 
+":"                         { return COLON; }
 "\."                        { return DOT; }                    
 \,                          { return COMMA; }
 \+                          { return PLUS; }

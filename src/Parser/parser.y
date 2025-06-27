@@ -62,6 +62,8 @@ struct ClassBody {
 %type <str> opt_inherits
 %type <class_body> class_body
 %type <member_def> member_def
+%type <str> opt_type
+%type <str> opt_ret_type
 
 
 %token LET IN 
@@ -76,6 +78,7 @@ struct ClassBody {
 %token LPAREN RPAREN LBRACE RBRACE COMMA SEMICOLON
 %token TYPE INHERITS NEW SELF BASE
 %token DOT
+%token COLON
 
 // Agregar precedencias para resolver conflictos
 %nonassoc ELIF_CONTENT
@@ -132,9 +135,11 @@ binding_list:
 ;
 
 binding:
-      IDENT ASSIGN expr {
-          $$ = new std::pair<std::string, Expr*>(std::string($1), $3);
+      IDENT opt_type ASSIGN expr {
+          $$ = new std::pair<std::string, Expr*>(std::string($1), $4);
+          /* $2 (el tipo) se descarta por ahora               */
           free($1);
+          if ($2) free($2);
       }
 ;
 
@@ -154,10 +159,10 @@ decl:
     }
 
   | /* función full-form */
-    FUNCTION IDENT LPAREN ident_list RPAREN LBRACE stmt_list RBRACE {
+    FUNCTION IDENT LPAREN ident_list RPAREN opt_ret_type LBRACE stmt_list RBRACE {
         auto args  = std::move(*$4);  delete $4;
         auto block = std::make_unique<Program>();
-        block->stmts = std::move(*$7); delete $7;
+        block->stmts = std::move(*$8); delete $8;
 
         $$ = new FunctionDecl(
                  std::string($2),
@@ -175,11 +180,11 @@ stmt:
       $$ = new ExprStmt( ExprPtr($1) );
     }
 
-  | FUNCTION IDENT LPAREN ident_list RPAREN ARROW expr  {
+  | FUNCTION IDENT LPAREN ident_list RPAREN opt_ret_type ARROW expr  {
           std::vector<std::string> args = std::move(*$4);
           delete $4;
 
-          $$ = new FunctionDecl(std::string($2), std::move(args), StmtPtr(new ExprStmt(ExprPtr($7))));
+          $$ = new FunctionDecl(std::string($2), std::move(args), StmtPtr(new ExprStmt(ExprPtr($8))));
           free($2);
       }
 
@@ -188,6 +193,16 @@ stmt:
 opt_inherits:
       /* vacío */            { $$ = strdup("Object"); }
     | INHERITS IDENT        { $$ = $2; }
+;
+
+opt_type:
+      /* vacío */               { $$ = nullptr; }    /* sin anotación */
+    | COLON IDENT               { $$ = $2;          /* ignoramos */ }
+;
+
+opt_ret_type:
+      /* vacío */         { $$ = nullptr; }
+    | COLON IDENT         { $$ = $2; }
 ;
 
 class_body:
@@ -207,17 +222,20 @@ class_body:
 ;
 
 member_def:
-    /* atributo */ IDENT ASSIGN expr SEMICOLON {
+    /* atributo */ IDENT opt_type ASSIGN expr SEMICOLON {
         $$ = new MemberDef{
             true,
-            { std::string($1), ExprPtr($3) },      // <<< ExprPtr
+            { std::string($1), ExprPtr($4) },      // <<< ExprPtr
             nullptr
         };
+        if ($2)
+            free($2);
+
         free($1);
     }
 
   | /* método full-form */
-    FUNCTION IDENT LPAREN ident_list RPAREN LBRACE stmt_list RBRACE {
+    FUNCTION IDENT LPAREN ident_list RPAREN opt_ret_type LBRACE stmt_list RBRACE {
         /* posiciones
             1: FUNCTION
             2: IDENT
@@ -230,7 +248,7 @@ member_def:
         */
         auto args = std::move(*$4); delete $4;     // <<< $4, no $5
         auto block = std::make_unique<Program>();
-        block->stmts = std::move(*$7); delete $7;  // <<< $7, no $8
+        block->stmts = std::move(*$8); delete $8;  // <<< $7, no $8
 
         FunctionDecl* fn = new FunctionDecl(
                                $2,
@@ -241,10 +259,10 @@ member_def:
     }
 
       | /* método full-form sin FUNCTION */
-    IDENT LPAREN ident_list RPAREN LBRACE stmt_list RBRACE {
+    IDENT LPAREN ident_list RPAREN opt_ret_type LBRACE stmt_list RBRACE {
         auto args  = std::move(*$3); delete $3;
         auto block = std::make_unique<Program>();
-        block->stmts = std::move(*$6); delete $6;
+        block->stmts = std::move(*$7); delete $7;
 
         FunctionDecl* fn = new FunctionDecl(
                                $1,
@@ -255,18 +273,21 @@ member_def:
     }
 
   | /* método inline con FUNCTION*/
-    FUNCTION IDENT LPAREN ident_list RPAREN ARROW expr SEMICOLON {
+    FUNCTION IDENT LPAREN ident_list RPAREN opt_ret_type ARROW expr SEMICOLON {
         /* posiciones
             1: FUNCTION
             2: IDENT
             3: LPAREN
             4: ident_list   <<< argumentos
             5: RPAREN
-            6: ARROW
-            7: expr         <<< cuerpo
+            6: opt_ret_type
+            7: ARROW
+            8: expr         <<< cuerpo
+            9: SEMICOLON
         */
         auto args = std::move(*$4); delete $4;     // <<< $4, no $5
-        ExprStmt* body = new ExprStmt(ExprPtr($7));
+        if ($6) free($6);
+        ExprStmt* body = new ExprStmt(ExprPtr($8));
 
         FunctionDecl* fn = new FunctionDecl(
                                $2,
@@ -277,9 +298,9 @@ member_def:
     }
 
       | /* método inline sin FUNCTION */
-    IDENT LPAREN ident_list RPAREN ARROW expr SEMICOLON {
+    IDENT LPAREN ident_list RPAREN opt_ret_type ARROW expr SEMICOLON {
         auto argsVec = std::move(*$3); delete $3;
-        ExprStmt* body = new ExprStmt(ExprPtr($6));
+        ExprStmt* body = new ExprStmt(ExprPtr($7));
 
         FunctionDecl* fn = new FunctionDecl(
                                $1,
@@ -301,8 +322,15 @@ stmt_list:
 
 ident_list:
       /* vacío */ { $$ = new std::vector<std::string>(); }
-    | IDENT { $$ = new std::vector<std::string>(); $$->push_back($1); free($1); }
-    | ident_list COMMA IDENT { $1->push_back($3); free($3); $$ = $1; }
+    | IDENT opt_type {
+          $$ = new std::vector<std::string>(); $$->push_back($1);
+          free($1); if ($2) free($2);
+      }
+    | ident_list COMMA IDENT opt_type {
+          $1->push_back($3);
+          free($3); if ($4) free($4);
+          $$ = $1;
+      }
 ;
 
 expr:

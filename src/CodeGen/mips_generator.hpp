@@ -33,6 +33,9 @@ private:
     std::unordered_map<std::string, std::vector<std::string>> method_to_functions; // método -> [f0, f1, ...]
     std::set<std::string> discovered_methods;                                      // métodos encontrados en VCALL
 
+    // ← ARREGLO DEL BUG: Mapeo directo tipo -> método -> función
+    std::unordered_map<std::string, std::unordered_map<std::string, std::string>> type_to_method_function;
+
     // ← NUEVO: Gestión dinámica de IDs de tipos
     std::unordered_map<std::string, int> type_ids; // tipo -> ID único
     int next_type_id = 1;                          // empezar en 1 (0 reservado para "desconocido")

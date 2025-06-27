@@ -1,9 +1,9 @@
 type A {
-  bombardilocrocodilo() => 5;
+  foo() => 5;
 }
 
 type B inherits A {
-  bombardilocrocodilo() => 10;
+  foo() => 10;
 }
 
 function bar(x) {
@@ -14,5 +14,5 @@ function bar(x) {
   };
 }
 
-print(bar(5).bombardilocrocodilo());
-print(bar(6).bombardilocrocodilo());
+print(bar(5).foo());
+print(bar(6).foo());

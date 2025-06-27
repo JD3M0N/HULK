@@ -143,12 +143,17 @@ void MIPSGenerator::processTypesSection(const std::string &line)
 
     static std::string current_type = "";
 
-    // Detectar definición de tipo: "type TypeName {"
-    std::regex type_regex("type\\s+(\\w+)\\s*\\{");
+    // Detectar definición de tipo: "type TypeName {" o "type TypeName inherits ParentType {"
+    std::regex type_regex("type\\s+(\\w+)(?:\\s+inherits\\s+\\w+)?\\s*\\{");
     std::smatch type_match;
     if (std::regex_match(line, type_match, type_regex))
     {
         current_type = type_match[1].str();
+        // ARREGLO DEL BUG: Asignar ID de tipo en el orden de declaración
+        if (type_ids.find(current_type) == type_ids.end()) {
+            type_ids[current_type] = next_type_id++;
+            emitComment("DEBUG: Assigned ID " + std::to_string(type_ids[current_type]) + " to type " + current_type);
+        }
         return;
     }
 
@@ -160,7 +165,17 @@ void MIPSGenerator::processTypesSection(const std::string &line)
         std::string method_name = method_match[1].str();
         std::string function_name = method_match[2].str();
 
-        // Asociar el método con la función específica para este tipo
+        // ARREGLO DEL BUG: Asociar el método con el tipo correcto y su función
+        if (!current_type.empty()) {
+            // Crear mapeo directo tipo -> función para cada método
+            type_to_method_function[current_type][method_name] = function_name;
+            // DEBUG: Agregar comentario para verificar mapeo
+            emitComment("DEBUG: Mapping " + current_type + "." + method_name + " -> " + function_name);
+        } else {
+            emitComment("DEBUG: ERROR - No current_type for method " + method_name);
+        }
+        
+        // Mantener la lista para compatibilidad (pero no se usará para el dispatcher)
         method_to_functions[method_name].push_back(function_name);
 
         return;
@@ -169,6 +184,7 @@ void MIPSGenerator::processTypesSection(const std::string &line)
     // Detectar fin de tipo: "}"
     if (line == "}")
     {
+        emitComment("DEBUG: End of type " + current_type);
         current_type = "";
     }
 }
@@ -1091,15 +1107,19 @@ void MIPSGenerator::generatePolymorphicDispatchers(std::ostringstream &result)
         result << "    \n";
         result << "    # Check object type\n";
 
-        // Generar casos dinámicamente basado en method_to_functions
-        if (method_to_functions.find(method_name) != method_to_functions.end())
-        {
-            const auto &functions = method_to_functions[method_name];
-            for (size_t i = 0; i < functions.size(); i++)
-            {
-                int type_id = i + 1; // Los IDs empiezan en 1
+        // ARREGLO DEL BUG: Generar casos basado en el mapeo tipo -> ID correcto
+        for (const auto &type_entry : type_to_method_function) {
+            const std::string &type_name = type_entry.first;
+            const auto &methods = type_entry.second;
+            
+            // Solo procesar si este tipo tiene el método que estamos generando
+            if (methods.find(method_name) != methods.end()) {
+                int type_id = type_ids[type_name];
+                const std::string &function_name = methods.at(method_name);
+                
+                result << "    # DEBUG: Type " << type_name << " (ID " << type_id << ") -> " << function_name << "\n";
                 result << "    li $t1, " << type_id << "\n";
-                result << "    beq $a0, $t1, " << method_name << "_call_" << functions[i] << "\n";
+                result << "    beq $a0, $t1, " << method_name << "_call_" << function_name << "\n";
             }
         }
 
@@ -1109,14 +1129,17 @@ void MIPSGenerator::generatePolymorphicDispatchers(std::ostringstream &result)
         result << "    j " << method_name << "_dispatcher_end\n";
         result << "    \n";
 
-        // Generar las etiquetas de llamada dinámicamente
-        if (method_to_functions.find(method_name) != method_to_functions.end())
-        {
-            const auto &functions = method_to_functions[method_name];
-            for (const auto &func : functions)
-            {
-                result << method_name << "_call_" << func << ":\n";
-                result << "    jal " << func << "\n";
+        // ARREGLO DEL BUG: Generar las etiquetas de llamada basado en el mapeo correcto
+        for (const auto &type_entry : type_to_method_function) {
+            const std::string &type_name = type_entry.first;
+            const auto &methods = type_entry.second;
+            
+            // Solo procesar si este tipo tiene el método que estamos generando
+            if (methods.find(method_name) != methods.end()) {
+                const std::string &function_name = methods.at(method_name);
+                
+                result << method_name << "_call_" << function_name << ":\n";
+                result << "    jal " << function_name << "\n";
                 result << "    j " << method_name << "_dispatcher_end\n";
                 result << "    \n";
             }
@@ -1132,16 +1155,17 @@ void MIPSGenerator::generatePolymorphicDispatchers(std::ostringstream &result)
     }
 }
 
-// ← NUEVO: Implementación de getTypeId
+// ← ARREGLO DEL BUG: Usar IDs pre-asignados en processTypesSection
 int MIPSGenerator::getTypeId(const std::string &type)
 {
-    // Si el tipo ya tiene un ID asignado, lo devolvemos
+    // Si el tipo ya tiene un ID asignado en processTypesSection, lo devolvemos
     if (type_ids.find(type) != type_ids.end())
     {
         return type_ids[type];
     }
 
-    // Si es un tipo nuevo, le asignamos un ID único
+    // Si por alguna razón no se asignó en processTypesSection, 
+    // asignar uno nuevo (esto no debería pasar en condiciones normales)
     int id = next_type_id++;
     type_ids[type] = id;
     return id;

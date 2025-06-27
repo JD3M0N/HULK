@@ -11,8 +11,14 @@ _start:
     li $v0, 10
     syscall
 
-    # DEBUG: Discovered method: bombardilocrocodilo
-    # DEBUG: Discovered method: bombardilocrocodilo
+    # DEBUG: Discovered method: foo
+    # DEBUG: Discovered method: foo
+    # DEBUG: Assigned ID 1 to type A
+    # DEBUG: Mapping A.foo -> f0
+    # DEBUG: End of type A
+    # DEBUG: Assigned ID 2 to type B
+    # DEBUG: Mapping B.foo -> f1
+    # DEBUG: End of type B
 f0:
     # Function: f0
     # Prolog
@@ -92,13 +98,13 @@ main:
     move $fp, $sp
     li $a0, 5
     jal bar
-    # VCALL: t5 = t4.bombardilocrocodilo()
+    # VCALL: t5 = t4.foo()
     # Object in temporal t4, using previous result
     move $t0, $v0
-    # Polymorphic call to bombardilocrocodilo method
+    # Polymorphic call to foo method
     # Check object type and call appropriate method
     move $a0, $t0
-    jal bombardilocrocodilo_polymorphic
+    jal foo_polymorphic
     move $a0, $v0
     li $v0, 1
     syscall
@@ -107,13 +113,13 @@ main:
     syscall
     li $a0, 6
     jal bar
-    # VCALL: t8 = t7.bombardilocrocodilo()
+    # VCALL: t8 = t7.foo()
     # Object in temporal t7, using previous result
     move $t0, $v0
-    # Polymorphic call to bombardilocrocodilo method
+    # Polymorphic call to foo method
     # Check object type and call appropriate method
     move $a0, $t0
-    jal bombardilocrocodilo_polymorphic
+    jal foo_polymorphic
     move $a0, $v0
     li $v0, 1
     syscall
@@ -129,8 +135,8 @@ main:
 
 
 # Polymorphic dispatch functions
-bombardilocrocodilo_polymorphic:
-    # Polymorphic dispatcher for bombardilocrocodilo method
+foo_polymorphic:
+    # Polymorphic dispatcher for foo method
     # $a0 contains object with type info
     
     # Prolog for dispatcher
@@ -140,24 +146,26 @@ bombardilocrocodilo_polymorphic:
     move $fp, $sp
     
     # Check object type
-    li $t1, 1
-    beq $a0, $t1, bombardilocrocodilo_call_f0
+    # DEBUG: Type B (ID 2) -> f1
     li $t1, 2
-    beq $a0, $t1, bombardilocrocodilo_call_f1
+    beq $a0, $t1, foo_call_f1
+    # DEBUG: Type A (ID 1) -> f0
+    li $t1, 1
+    beq $a0, $t1, foo_call_f0
     
     # Default case - should not happen
     li $v0, 0
-    j bombardilocrocodilo_dispatcher_end
+    j foo_dispatcher_end
     
-bombardilocrocodilo_call_f0:
-    jal f0
-    j bombardilocrocodilo_dispatcher_end
-    
-bombardilocrocodilo_call_f1:
+foo_call_f1:
     jal f1
-    j bombardilocrocodilo_dispatcher_end
+    j foo_dispatcher_end
     
-bombardilocrocodilo_dispatcher_end:
+foo_call_f0:
+    jal f0
+    j foo_dispatcher_end
+    
+foo_dispatcher_end:
     # Epilog for dispatcher
     lw $ra, 12($sp)
     lw $fp, 8($sp)

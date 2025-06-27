@@ -13,14 +13,16 @@
 #include "../Type/type.hpp"
 
 // Estructura simple para ubicación
-struct Location {
+struct Location
+{
     int line = 0;
     int column = 0;
-    
+
     Location() = default;
     Location(int l, int c) : line(l), column(c) {}
-    
-    std::string toString() const {
+
+    std::string toString() const
+    {
         return "line " + std::to_string(line) + ", column " + std::to_string(column);
     }
 };
@@ -48,6 +50,7 @@ struct BaseExpr;
 struct SelfExpr;
 struct MemberAccessExpr;
 struct MemberAssignExpr;
+struct MethodCallExpr;
 struct ClassDecl;
 
 // Visitors

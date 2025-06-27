@@ -10,7 +10,7 @@ TypeInfererVisitor::TypeInfererVisitor()
     : env(std::make_shared<Scope<TypePtr>>(nullptr))
 {
     std::cout << "=== INICIALIZANDO INFERENCIA DE TIPOS ===" << std::endl;
-    
+
     // NO registrar print aquí - será manejado en cada CallExpr
     std::cout << "Entorno base inicializado" << std::endl;
 }
@@ -73,15 +73,16 @@ void TypeInfererVisitor::visit(CallExpr *expr)
         arg->accept(this);
 
     TypePtr fnType;
-    
-    if(expr->callee == "print")
+
+    if (expr->callee == "print")
     {
         auto freshParam = Type::makeVar();
         auto freshRet = Type::makeVar();
         fnType = Type::makeFunction({freshParam}, freshRet);
     }
-    else fnType = env->lookup(expr->callee); 
-    
+    else
+        fnType = env->lookup(expr->callee);
+
     for (size_t i = 0; i < expr->args.size(); ++i)
         unify(expr->args[i]->inferredType, fnType->params[i]);
     expr->inferredType = fnType->retType;
@@ -186,11 +187,21 @@ void TypeInfererVisitor::visit(ClassDecl *decl)
     {
         attr.second->accept(this);
     }
-    // Inferimos cada método (FunctionDecl*)
+
+    // Para los métodos, crear un scope separado para cada clase
+    // para evitar colisiones de nombres entre métodos de diferentes clases
+    auto parent = env;
+    env = std::make_shared<Scope<TypePtr>>(parent);
+
+    // Inferimos cada método (FunctionDecl*) en el scope de la clase
     for (auto &m : decl->methods)
     {
         m->accept(this);
     }
+
+    // Restaurar el scope padre
+    env = parent;
+
     // No devolvemos nada; las declaraciones de clase no son expresiones
 }
 

@@ -82,8 +82,34 @@ public:
     // 3) Llamadas y variables
     void visit(CallExpr *expr) override
     {
-        // Verifica que la función exista en el scope
-        const auto& funcInfo = currentScope_->lookup(expr->callee);
+        // Detectar si es una llamada a método
+        // Si tenemos argumentos y el primer argumento es una expresión compleja,
+        // probablemente es una llamada a método (obj.method(args))
+        bool isMethodCall = false;
+        if (!expr->args.empty())
+        {
+            // Verificar si el primer argumento es resultado de una expresión compleja
+            if (auto *firstArg = expr->args[0].get())
+            {
+                // Si no es una simple variable, probablemente es un objeto
+                if (!dynamic_cast<VariableExpr *>(firstArg))
+                {
+                    isMethodCall = true;
+                }
+            }
+        }
+
+        if (isMethodCall)
+        {
+            // Es una llamada a método - no buscar en scope global
+            // Solo resolver los argumentos
+            for (auto &arg : expr->args)
+                arg->accept(this);
+            return;
+        }
+
+        // Llamada a función regular - verificar en scope
+        const auto &funcInfo = currentScope_->lookup(expr->callee);
 
         // Verificar que sea una función
         if (funcInfo.kind != SymbolInfo::FUNCTION)

@@ -1,27 +1,25 @@
+type A {
+  foo() => 5;
+}
 
+type B inherits A {
+  foo() => 10;
+}
 
-function factorial_iterative(n) => {
-    let result = 1 in
-    let i = 1 in {
-        while (i <= n) {
-            result := result * i;
-            i := i + 1;
-        };
-        result;
-    };
+function bar(x) => {
+  if (x>5) {
+    new A();
+  } else {
+    new B();
+  };
 };
 
-function sum_range(start, end) => {
-    let sum = 0 in
-    let current = start in {
-        while (current <= end) {
-            sum := sum + current;
-            current := current + 1;
-        };
-        sum;
-    };
+function g(x, y) => {
+    if (y < 5) {
+        x;
+    } else {
+        "hola";
+    }; 
 };
 
-print(factorial_iterative(5));
-print(sum_range(1, 10));
-print("hola");
+let a  = new A() in print(a.foo());

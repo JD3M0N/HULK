@@ -12,7 +12,7 @@ PARSER_GEN_HPP = src/Parser/parser.tab.hpp
 # Fuentes propias
 MAIN_SRC         = src/main.cpp
 TYPE_SRC         = src/Type/type.cpp
-TYPEINF_SRC      = src/Type/type_inferer.cpp
+#TYPEINF_SRC      = src/Type/type_inferer.cpp
 CODEGEN_SRC      = src/CodeGen/cil_generator.cpp
 MIPSGEN_SRC      = src/CodeGen/mips_generator.cpp
 
@@ -22,9 +22,9 @@ OBJS = \
 	$(LEXER_GEN:.cpp=.o)    \
 	$(MAIN_SRC:.cpp=.o)     \
 	$(TYPE_SRC:.cpp=.o)     \
-	$(TYPEINF_SRC:.cpp=.o)  \
 	$(CODEGEN_SRC:.cpp=.o)  \
 	$(MIPSGEN_SRC:.cpp=.o)
+
 
 # Ejecutable del compilador HULK
 BIN_DIR    = hulk

@@ -251,4 +251,15 @@ public:
         // Verifica que expr->member exista en el scope del objeto si lo deseas:
         expr->value->accept(this);
     }
+
+    void visit(MemberCallExpr *expr) override
+    {
+        expr->object->accept(this);          // resolver el objeto
+        for (auto &a : expr->args)           // resolver cada argumento
+            a->accept(this);
+
+        // *(versión sencilla)*: no verificamos todavía que
+        // 'method' exista en el tipo del objeto; eso vendrá en
+        // la fase de chequeo semántico de tipos.
+    }
 };

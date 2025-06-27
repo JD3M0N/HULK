@@ -285,6 +285,33 @@ struct PrintVisitor : StmtVisitor, ExprVisitor
         indentLevel--;
     }
 
+    void visit(MemberCallExpr *expr) override
+    {
+        printIndent();
+        std::cout << "|_ MemberCall: " << expr->method << "()\n";
+        indentLevel++;
+
+        // objeto
+        printIndent();
+        std::cout << "|_ Object:\n";
+        indentLevel++;
+        expr->object->accept(this);
+        indentLevel--;
+
+        // argumentos
+        if (!expr->args.empty())
+        {
+            printIndent();
+            std::cout << "|_ Args:\n";
+            indentLevel++;
+            for (auto &arg : expr->args)
+                arg->accept(this);
+            indentLevel--;
+        }
+
+        indentLevel--;
+    }
+
 private:
     std::string
     opToString(BinaryExpr::Op op)

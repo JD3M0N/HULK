@@ -48,6 +48,7 @@ struct BaseExpr;
 struct SelfExpr;
 struct MemberAccessExpr;
 struct MemberAssignExpr;
+struct MemberCallExpr;
 struct ClassDecl;
 
 // Visitors
@@ -71,6 +72,7 @@ struct ExprVisitor
     virtual void visit(BaseExpr *expr) = 0;
     virtual void visit(MemberAccessExpr *expr) = 0;
     virtual void visit(MemberAssignExpr *expr) = 0;
+    virtual void visit(MemberCallExpr *expr) = 0;
     virtual ~ExprVisitor() = default;
 };
 
@@ -410,6 +412,20 @@ struct MemberAssignExpr : Expr
           value(std::move(v))
     {
     }
+    void accept(ExprVisitor *v) override { v->visit(this); }
+};
+
+struct MemberCallExpr : Expr
+{
+    ExprPtr object;              // la expresión objeto, ej. pt
+    std::string method;          // el nombre del método, ej. "getX"
+    std::vector<ExprPtr> args;   // lista de argumentos
+
+    MemberCallExpr(ExprPtr o, std::string m, std::vector<ExprPtr>&& a)
+        : object(std::move(o)),
+          method(std::move(m)),
+          args(std::move(a)) {}
+
     void accept(ExprVisitor *v) override { v->visit(this); }
 };
 

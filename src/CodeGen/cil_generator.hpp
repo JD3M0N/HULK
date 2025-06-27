@@ -78,6 +78,7 @@ public:
     void visit(BaseExpr* expr) override;
     void visit(MemberAccessExpr* expr) override;
     void visit(MemberAssignExpr* expr) override;
+    void visit(MemberCallExpr* expr) override;
     
 private:
     // Nuevos métodos auxiliares para herencia

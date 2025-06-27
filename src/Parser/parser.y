@@ -462,6 +462,16 @@ expr:
     | BASE {
         $$ = new BaseExpr();
     }
+    | expr DOT IDENT LPAREN argument_list RPAREN {
+        $$ = new MemberCallExpr(
+                 ExprPtr($1),
+                 std::string($3),
+                 std::move(*$5)
+             );
+        free($3);
+        delete $5; 
+    }
+
     | expr DOT IDENT {
         $$ = new MemberAccessExpr( ExprPtr($1), std::string($3) );
         free($3);

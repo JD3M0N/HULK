@@ -621,6 +621,31 @@ void CILGenerator::visit(MemberAssignExpr* expr)
     last_temp = value; // El resultado de la asignación es el valor asignado
 }
 
+void CILGenerator::visit(MemberCallExpr* expr)
+{
+    /* 1) evaluar el objeto y guardar en un temp (`self`) */
+    expr->object->accept(this);
+    std::string selfTemp = last_temp;
+
+    /* 2) evaluar cada argumento y guardarlos en un vector */
+    std::vector<std::string> argTemps;
+    for (auto &arg : expr->args)
+    {
+        arg->accept(this);
+        argTemps.push_back(last_temp);
+    }
+
+    /* 3) generar llamada dinámica (VCALL) */
+    last_temp = newTemp();
+
+    // Primero el objeto como implícito 'self'
+    std::string instr = last_temp + " = VCALL " + selfTemp + " " + expr->method;
+    for (const auto &at : argTemps)
+        instr += " " + at;
+
+    emitInstruction(instr);
+}
+
 void CILGenerator::visit(ExprBlock* expr)
 {
     // Generar código para cada statement en el bloque

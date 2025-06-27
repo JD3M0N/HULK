@@ -4,7 +4,6 @@
 
 #include "AST/ast.hpp"
 #include "Scope/name_resolver.hpp"
-#include "Type/type_inferer.hpp"
 #include "PrintVisitor/print_visitor.hpp"
 #include "Value/value.hpp"
 #include "CodeGen/cil_generator.hpp"
@@ -55,21 +54,6 @@ int main(int argc, char *argv[])
         std::cerr << "Error de resolucion de nombres: " << e.what() << "\n";
         std::fclose(file);
         return 2;
-    }
-
-    // 3) Inferencia de tipos
-    std::cout << "=== Inferencia de tipos ===\n";
-    try
-    {
-        TypeInfererVisitor typeInferer;
-        rootAST->accept(&typeInferer);
-        std::cout << "=== Inferencia de tipos OK ===\n";
-    }
-    catch (const std::exception &e)
-    {
-        std::cerr << "Error de inferencia de tipos: " << e.what() << "\n";
-        std::fclose(file);
-        return 3;
     }
 
     // 4) Pretty-print del AST

@@ -131,86 +131,89 @@ void CILGenerator::emitTypeDeclarationWithInheritance(
 
 void CILGenerator::visit(Program *prog)
 {
-    // NUEVO: Primero registrar todas las clases para resolver herencia
-    for (auto &stmt : prog->stmts)
+    // Solo procesar como programa principal si current_function está vacío
+    if (current_function.empty())
     {
-        auto *cls = dynamic_cast<ClassDecl *>(stmt.get());
-        if (cls)
+        // NUEVO: Primero registrar todas las clases para resolver herencia
+        for (auto &stmt : prog->stmts)
         {
-            registerClass(cls);
+            auto *cls = dynamic_cast<ClassDecl *>(stmt.get());
+            if (cls)
+            {
+                registerClass(cls);
+            }
         }
-    }
 
-    // Construir VTables para todas las clases
-    for (auto &stmt : prog->stmts)
-    {
-        auto *cls = dynamic_cast<ClassDecl *>(stmt.get());
-        if (cls)
+        // Construir VTables para todas las clases
+        for (auto &stmt : prog->stmts)
         {
-            buildVTable(cls);
+            auto *cls = dynamic_cast<ClassDecl *>(stmt.get());
+            if (cls)
+            {
+                buildVTable(cls);
+            }
         }
-    }
 
-    // Emitir VTables en la sección de datos
-    for (const auto &pair : vtables)
-    {
-        emitVTableDeclaration(pair.first, pair.second);
-    }
-
-    // Emitir tabla de dispatch de métodos
-    emitMethodDispatchTable();
-
-    // Luego generar todas las clases (que incluyen los tipos)
-    for (auto &stmt : prog->stmts)
-    {
-        auto *cls = dynamic_cast<ClassDecl *>(stmt.get());
-        if (cls)
+        // Luego generar todas las clases (que incluyen los tipos)
+        for (auto &stmt : prog->stmts)
         {
-            cls->accept(this);
+            auto *cls = dynamic_cast<ClassDecl *>(stmt.get());
+            if (cls)
+            {
+                cls->accept(this);
+            }
         }
-    }
 
-    // Luego generar todas las funciones
-    for (auto &stmt : prog->stmts)
-    {
-        auto *func = dynamic_cast<FunctionDecl *>(stmt.get());
-        if (func)
+        // Luego generar todas las funciones
+        for (auto &stmt : prog->stmts)
         {
-            func->accept(this);
+            auto *func = dynamic_cast<FunctionDecl *>(stmt.get());
+            if (func)
+            {
+                func->accept(this);
+            }
         }
-    }
 
-    // Crear función entry para el código restante (según especificación del libro)
-    bool hasMainCode = false;
-    for (auto &stmt : prog->stmts)
-    {
-        auto *func = dynamic_cast<FunctionDecl *>(stmt.get());
-        auto *cls = dynamic_cast<ClassDecl *>(stmt.get());
-        if (!func && !cls)
-        {
-            hasMainCode = true;
-            break;
-        }
-    }
-
-    if (hasMainCode)
-    {
-        code_section << "\nfunction entry {\n";
-        current_function = "entry";
-
-        // Procesar statements del main
+        // Crear función entry para el código restante (según especificación del libro)
+        bool hasMainCode = false;
         for (auto &stmt : prog->stmts)
         {
             auto *func = dynamic_cast<FunctionDecl *>(stmt.get());
             auto *cls = dynamic_cast<ClassDecl *>(stmt.get());
             if (!func && !cls)
             {
-                stmt->accept(this);
+                hasMainCode = true;
+                break;
             }
         }
 
-        emitInstruction("RETURN 0");
-        code_section << "}\n";
+        if (hasMainCode)
+        {
+            code_section << "\nfunction entry {\n";
+            current_function = "entry";
+
+            // Procesar statements del main
+            for (auto &stmt : prog->stmts)
+            {
+                auto *func = dynamic_cast<FunctionDecl *>(stmt.get());
+                auto *cls = dynamic_cast<ClassDecl *>(stmt.get());
+                if (!func && !cls)
+                {
+                    stmt->accept(this);
+                }
+            }
+
+            emitInstruction("RETURN 0");
+            code_section << "}\n";
+        }
+    }
+    else
+    {
+        // Estamos dentro de una función - solo procesar statements
+        for (auto &stmt : prog->stmts)
+        {
+            stmt->accept(this);
+        }
     }
 }
 
@@ -302,6 +305,12 @@ void CILGenerator::visit(ClassDecl *cls)
 
     // Emitir declaración de tipo CON INFORMACIÓN DE HERENCIA
     emitTypeDeclarationWithInheritance(cls->name, cls->parent, attr_names, method_info);
+
+    // Emitir VTable en la sección de datos
+    if (vtables.find(cls->name) != vtables.end())
+    {
+        emitVTableDeclaration(cls->name, vtables[cls->name]);
+    }
 
     // 2. Generar métodos usando la VTable
     if (vtables.find(cls->name) != vtables.end())
@@ -464,6 +473,19 @@ void CILGenerator::visit(CallExpr *expr)
     }
 
     last_temp = newTemp();
+
+    // Casos especiales para funciones built-in
+    if (expr->callee == "print")
+    {
+        // print siempre es una función, no un método
+        std::string call_instr = last_temp + " = CALL " + expr->callee;
+        for (const auto &arg : args)
+        {
+            call_instr += " " + arg;
+        }
+        emitInstruction(call_instr);
+        return;
+    }
 
     // Verificar si es una llamada a método (el primer argumento es un objeto)
     // Esto se determina por si tenemos más de 0 argumentos y el parser insertó el objeto como primer arg

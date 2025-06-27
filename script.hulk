@@ -1,9 +1,9 @@
 type A {
-  foo() => 5;
+  pepe() => 5;
 }
 
 type B inherits A {
-  foo() => 10;
+  pepe() => 10;
 }
 
 function bar(x) {
@@ -14,5 +14,5 @@ function bar(x) {
   };
 }
 
-print(bar(5).foo());
-print(bar(6).foo());
+print(bar(5).pepe());
+print(bar(6).pepe());

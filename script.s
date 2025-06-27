@@ -11,6 +11,8 @@ _start:
     li $v0, 10
     syscall
 
+    # DEBUG: Discovered method: bombardilocrocodilo
+    # DEBUG: Discovered method: bombardilocrocodilo
 f0:
     # Function: f0
     # Prolog
@@ -90,11 +92,13 @@ main:
     move $fp, $sp
     li $a0, 5
     jal bar
-    # VCALL: t5 = t4.pepe()
+    # VCALL: t5 = t4.bombardilocrocodilo()
     # Object in temporal t4, using previous result
     move $t0, $v0
-    # Unknown method: pepe
-    li $v0, 0
+    # Polymorphic call to bombardilocrocodilo method
+    # Check object type and call appropriate method
+    move $a0, $t0
+    jal bombardilocrocodilo_polymorphic
     move $a0, $v0
     li $v0, 1
     syscall
@@ -103,11 +107,13 @@ main:
     syscall
     li $a0, 6
     jal bar
-    # VCALL: t8 = t7.pepe()
+    # VCALL: t8 = t7.bombardilocrocodilo()
     # Object in temporal t7, using previous result
     move $t0, $v0
-    # Unknown method: pepe
-    li $v0, 0
+    # Polymorphic call to bombardilocrocodilo method
+    # Check object type and call appropriate method
+    move $a0, $t0
+    jal bombardilocrocodilo_polymorphic
     move $a0, $v0
     li $v0, 1
     syscall
@@ -123,8 +129,8 @@ main:
 
 
 # Polymorphic dispatch functions
-faa_polymorphic:
-    # Polymorphic dispatcher for faa method
+bombardilocrocodilo_polymorphic:
+    # Polymorphic dispatcher for bombardilocrocodilo method
     # $a0 contains object with type info
     # Object type: 1=A, 2=B
     
@@ -136,23 +142,23 @@ faa_polymorphic:
     
     # Check object type
     li $t1, 1
-    beq $a0, $t1, call_f0
+    beq $a0, $t1, bombardilocrocodilo_call_f0
     li $t1, 2
-    beq $a0, $t1, call_f1
+    beq $a0, $t1, bombardilocrocodilo_call_f1
     
     # Default case - should not happen
     li $v0, 0
-    j dispatcher_end
+    j bombardilocrocodilo_dispatcher_end
     
-call_f0:
+bombardilocrocodilo_call_f0:
     jal f0
-    j dispatcher_end
+    j bombardilocrocodilo_dispatcher_end
     
-call_f1:
+bombardilocrocodilo_call_f1:
     jal f1
-    j dispatcher_end
+    j bombardilocrocodilo_dispatcher_end
     
-dispatcher_end:
+bombardilocrocodilo_dispatcher_end:
     # Epilog for dispatcher
     lw $ra, 12($sp)
     lw $fp, 8($sp)

@@ -27,6 +27,47 @@ std::string MIPSGenerator::generateMIPS(const std::string &cil_code)
     bool in_data = false, in_types = false, in_code = false;
     std::string current_section;
 
+    // ✅ PASADA 1: Analizar el CIL para extraer información de métodos polimórficos
+    std::istringstream first_pass(cil_code);
+    std::string first_line;
+    while (std::getline(first_pass, first_line))
+    {
+        first_line.erase(0, first_line.find_first_not_of(" \t"));
+        first_line.erase(first_line.find_last_not_of(" \t") + 1);
+
+        if (first_line.empty() || first_line[0] == '#')
+            continue;
+
+        // Detectar VCALL para extraer métodos usados
+        std::regex vcall_regex("^\\s*(\\w+)\\s*=\\s*VCALL\\s+(\\w+)\\s+(\\w+)");
+        std::smatch vcall_match;
+        if (std::regex_search(first_line, vcall_match, vcall_regex))
+        {
+            std::string method_name = vcall_match[3].str();
+            discovered_methods.insert(method_name);
+            emitComment("DEBUG: Discovered method: " + method_name);
+        }
+
+        // Detectar definiciones de funciones para crear mapeo
+        std::regex func_regex("function\\s+(\\w+)\\s*\\{");
+        std::smatch func_match;
+        if (std::regex_search(first_line, func_match, func_regex))
+        {
+            std::string func_name = func_match[1].str();
+            // Si es una función f0, f1, etc., asociarla con métodos
+            if (func_name[0] == 'f' && func_name.length() > 1 && std::isdigit(func_name[1]))
+            {
+                // Por ahora, asumimos que todos los métodos usan estas funciones
+                // Esto se refinará al analizar la sección TYPES
+                for (const auto &method : discovered_methods)
+                {
+                    method_to_functions[method].push_back(func_name);
+                }
+            }
+        }
+    }
+
+    // ✅ PASADA 2: Procesar el CIL normalmente
     while (std::getline(stream, line))
     {
         line.erase(0, line.find_first_not_of(" \t"));
@@ -81,44 +122,8 @@ std::string MIPSGenerator::generateMIPS(const std::string &cil_code)
     result << data_section.str() << "\n";
     result << text_section.str();
 
-    // ✅ Agregar funciones polimórficas al final
-    result << "\n# Polymorphic dispatch functions\n";
-    result << "faa_polymorphic:\n";
-    result << "    # Polymorphic dispatcher for faa method\n";
-    result << "    # $a0 contains object with type info\n";
-    result << "    # Object type: 1=A, 2=B\n";
-    result << "    \n";
-    result << "    # Prolog for dispatcher\n";
-    result << "    addi $sp, $sp, -16\n";
-    result << "    sw $ra, 12($sp)\n";
-    result << "    sw $fp, 8($sp)\n";
-    result << "    move $fp, $sp\n";
-    result << "    \n";
-    result << "    # Check object type\n";
-    result << "    li $t1, 1\n";
-    result << "    beq $a0, $t1, call_f0\n";
-    result << "    li $t1, 2\n";
-    result << "    beq $a0, $t1, call_f1\n";
-    result << "    \n";
-    result << "    # Default case - should not happen\n";
-    result << "    li $v0, 0\n";
-    result << "    j dispatcher_end\n";
-    result << "    \n";
-    result << "call_f0:\n";
-    result << "    jal f0\n";
-    result << "    j dispatcher_end\n";
-    result << "    \n";
-    result << "call_f1:\n";
-    result << "    jal f1\n";
-    result << "    j dispatcher_end\n";
-    result << "    \n";
-    result << "dispatcher_end:\n";
-    result << "    # Epilog for dispatcher\n";
-    result << "    lw $ra, 12($sp)\n";
-    result << "    lw $fp, 8($sp)\n";
-    result << "    addi $sp, $sp, 16\n";
-    result << "    jr $ra\n";
-    result << "\n";
+    // ✅ GENERAR FUNCIONES POLIMÓRFICAS DINÁMICAMENTE
+    generatePolymorphicDispatchers(result);
 
     return result.str();
 }
@@ -844,21 +849,13 @@ void MIPSGenerator::translateCILInstruction(const std::string &line,
             return;
         }
 
-        // Para este ejemplo específico con método "faa":
-        if (method == "faa")
-        {
-            emitComment("Polymorphic call to faa method");
-            emitComment("Check object type and call appropriate method");
+        // ✅ LLAMADA POLIMÓRFICA GENÉRICA: usar dispatcher dinámico
+        emitComment("Polymorphic call to " + method + " method");
+        emitComment("Check object type and call appropriate method");
 
-            // Simplified polymorphic dispatch
-            emitInstruction("move $a0, $t0");
-            emitInstruction("jal faa_polymorphic");
-        }
-        else
-        {
-            emitComment("Unknown method: " + method);
-            emitInstruction("li $v0, 0"); // Default return
-        }
+        // Usar el dispatcher específico para este método
+        emitInstruction("move $a0, $t0");
+        emitInstruction("jal " + method + "_polymorphic");
         return;
     }
 
@@ -1059,4 +1056,50 @@ void MIPSGenerator::generateGetAttribute(const std::string &dest, const std::str
 void MIPSGenerator::generateSetAttribute(const std::string &obj, const std::string &attr, const std::string &value)
 {
     // Implementación si es necesaria
+}
+
+void MIPSGenerator::generatePolymorphicDispatchers(std::ostringstream &result)
+{
+    result << "\n# Polymorphic dispatch functions\n";
+
+    // Generar un dispatcher para cada método descubierto
+    for (const auto &method_name : discovered_methods)
+    {
+        result << method_name << "_polymorphic:\n";
+        result << "    # Polymorphic dispatcher for " << method_name << " method\n";
+        result << "    # $a0 contains object with type info\n";
+        result << "    # Object type: 1=A, 2=B\n";
+        result << "    \n";
+        result << "    # Prolog for dispatcher\n";
+        result << "    addi $sp, $sp, -16\n";
+        result << "    sw $ra, 12($sp)\n";
+        result << "    sw $fp, 8($sp)\n";
+        result << "    move $fp, $sp\n";
+        result << "    \n";
+        result << "    # Check object type\n";
+        result << "    li $t1, 1\n";
+        result << "    beq $a0, $t1, " << method_name << "_call_f0\n";
+        result << "    li $t1, 2\n";
+        result << "    beq $a0, $t1, " << method_name << "_call_f1\n";
+        result << "    \n";
+        result << "    # Default case - should not happen\n";
+        result << "    li $v0, 0\n";
+        result << "    j " << method_name << "_dispatcher_end\n";
+        result << "    \n";
+        result << method_name << "_call_f0:\n";
+        result << "    jal f0\n";
+        result << "    j " << method_name << "_dispatcher_end\n";
+        result << "    \n";
+        result << method_name << "_call_f1:\n";
+        result << "    jal f1\n";
+        result << "    j " << method_name << "_dispatcher_end\n";
+        result << "    \n";
+        result << method_name << "_dispatcher_end:\n";
+        result << "    # Epilog for dispatcher\n";
+        result << "    lw $ra, 12($sp)\n";
+        result << "    lw $fp, 8($sp)\n";
+        result << "    addi $sp, $sp, 16\n";
+        result << "    jr $ra\n";
+        result << "\n";
+    }
 }

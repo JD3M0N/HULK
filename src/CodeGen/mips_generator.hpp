@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <set>
 #include <sstream>
 #include <memory>
 
@@ -26,6 +27,10 @@ private:
     std::unordered_map<std::string, int> function_labels;
     int label_counter = 0;
     int next_offset = 0; // ← NUEVO: contador de offsets por función
+
+    // ← NUEVO: Gestión dinámica de métodos polimórficos
+    std::unordered_map<std::string, std::vector<std::string>> method_to_functions; // método -> [f0, f1, ...]
+    std::set<std::string> discovered_methods;                                      // métodos encontrados en VCALL
 
     // ← NUEVO MÉTODO AUXILIAR
     bool isLiteral(const std::string &var);
@@ -74,4 +79,7 @@ public:
     void generateArrayAllocation(const std::string &dest, const std::string &size);
     void generateGetAttribute(const std::string &dest, const std::string &obj, const std::string &attr);
     void generateSetAttribute(const std::string &obj, const std::string &attr, const std::string &value);
+
+    // ← NUEVO: Generación dinámica de dispatchers polimórficos
+    void generatePolymorphicDispatchers(std::ostringstream &result);
 };

@@ -54,16 +54,8 @@ std::string MIPSGenerator::generateMIPS(const std::string &cil_code)
         if (std::regex_search(first_line, func_match, func_regex))
         {
             std::string func_name = func_match[1].str();
-            // Si es una función f0, f1, etc., asociarla con métodos
-            if (func_name[0] == 'f' && func_name.length() > 1 && std::isdigit(func_name[1]))
-            {
-                // Por ahora, asumimos que todos los métodos usan estas funciones
-                // Esto se refinará al analizar la sección TYPES
-                for (const auto &method : discovered_methods)
-                {
-                    method_to_functions[method].push_back(func_name);
-                }
-            }
+            // La asociación función-método se hace en processTypesSection
+            // ya que tenemos la información completa ahí
         }
     }
 
@@ -146,7 +138,39 @@ void MIPSGenerator::processDataSection(const std::string &line)
 
 void MIPSGenerator::processTypesSection(const std::string &line)
 {
-    // Para MIPS, los tipos se manejan en tiempo de ejecución
+    // Parsear información de tipos y métodos del CIL
+    // Formato: "type TypeName {" o "method MethodName: function_name ;"
+
+    static std::string current_type = "";
+
+    // Detectar definición de tipo: "type TypeName {"
+    std::regex type_regex("type\\s+(\\w+)\\s*\\{");
+    std::smatch type_match;
+    if (std::regex_match(line, type_match, type_regex))
+    {
+        current_type = type_match[1].str();
+        return;
+    }
+
+    // Detectar método: "method MethodName: function_name ;"
+    std::regex method_regex("method\\s+\\w+_(\\w+)\\s*:\\s*(\\w+)\\s*;");
+    std::smatch method_match;
+    if (std::regex_match(line, method_match, method_regex))
+    {
+        std::string method_name = method_match[1].str();
+        std::string function_name = method_match[2].str();
+
+        // Asociar el método con la función específica para este tipo
+        method_to_functions[method_name].push_back(function_name);
+
+        return;
+    }
+
+    // Detectar fin de tipo: "}"
+    if (line == "}")
+    {
+        current_type = "";
+    }
 }
 
 void MIPSGenerator::processCodeSection(const std::string &section)
@@ -1058,7 +1082,6 @@ void MIPSGenerator::generatePolymorphicDispatchers(std::ostringstream &result)
         result << method_name << "_polymorphic:\n";
         result << "    # Polymorphic dispatcher for " << method_name << " method\n";
         result << "    # $a0 contains object with type info\n";
-        result << "    # Object type: 1=A, 2=B\n";
         result << "    \n";
         result << "    # Prolog for dispatcher\n";
         result << "    addi $sp, $sp, -16\n";
@@ -1067,23 +1090,38 @@ void MIPSGenerator::generatePolymorphicDispatchers(std::ostringstream &result)
         result << "    move $fp, $sp\n";
         result << "    \n";
         result << "    # Check object type\n";
-        result << "    li $t1, 1\n";
-        result << "    beq $a0, $t1, " << method_name << "_call_f0\n";
-        result << "    li $t1, 2\n";
-        result << "    beq $a0, $t1, " << method_name << "_call_f1\n";
+
+        // Generar casos dinámicamente basado en method_to_functions
+        if (method_to_functions.find(method_name) != method_to_functions.end())
+        {
+            const auto &functions = method_to_functions[method_name];
+            for (size_t i = 0; i < functions.size(); i++)
+            {
+                int type_id = i + 1; // Los IDs empiezan en 1
+                result << "    li $t1, " << type_id << "\n";
+                result << "    beq $a0, $t1, " << method_name << "_call_" << functions[i] << "\n";
+            }
+        }
+
         result << "    \n";
         result << "    # Default case - should not happen\n";
         result << "    li $v0, 0\n";
         result << "    j " << method_name << "_dispatcher_end\n";
         result << "    \n";
-        result << method_name << "_call_f0:\n";
-        result << "    jal f0\n";
-        result << "    j " << method_name << "_dispatcher_end\n";
-        result << "    \n";
-        result << method_name << "_call_f1:\n";
-        result << "    jal f1\n";
-        result << "    j " << method_name << "_dispatcher_end\n";
-        result << "    \n";
+
+        // Generar las etiquetas de llamada dinámicamente
+        if (method_to_functions.find(method_name) != method_to_functions.end())
+        {
+            const auto &functions = method_to_functions[method_name];
+            for (const auto &func : functions)
+            {
+                result << method_name << "_call_" << func << ":\n";
+                result << "    jal " << func << "\n";
+                result << "    j " << method_name << "_dispatcher_end\n";
+                result << "    \n";
+            }
+        }
+
         result << method_name << "_dispatcher_end:\n";
         result << "    # Epilog for dispatcher\n";
         result << "    lw $ra, 12($sp)\n";
@@ -1102,7 +1140,7 @@ int MIPSGenerator::getTypeId(const std::string &type)
     {
         return type_ids[type];
     }
-    
+
     // Si es un tipo nuevo, le asignamos un ID único
     int id = next_type_id++;
     type_ids[type] = id;

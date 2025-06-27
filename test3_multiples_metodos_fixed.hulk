@@ -1,0 +1,27 @@
+type Shape {
+  area() => 0;
+  perimeter() => 0;
+}
+
+type Rectangle inherits Shape {
+  area() => 20;
+  perimeter() => 18;
+}
+
+type Circle inherits Shape {
+  area() => 314;
+  perimeter() => 628;
+}
+
+function createShape(isCircle) {
+  if (isCircle == 1) {
+    new Circle();
+  } else {
+    new Rectangle();
+  };
+}
+
+print(createShape(0).area());
+print(createShape(0).perimeter());
+print(createShape(1).area());
+print(createShape(1).perimeter());

@@ -5,6 +5,7 @@
 #include <set>
 #include <sstream>
 #include <memory>
+#include <regex>
 
 class MIPSGenerator
 {
@@ -33,8 +34,8 @@ private:
     std::set<std::string> discovered_methods;                                      // métodos encontrados en VCALL
 
     // ← NUEVO: Gestión dinámica de IDs de tipos
-    std::unordered_map<std::string, int> type_ids;                                 // tipo -> ID único
-    int next_type_id = 1;                                                           // empezar en 1 (0 reservado para "desconocido")
+    std::unordered_map<std::string, int> type_ids; // tipo -> ID único
+    int next_type_id = 1;                          // empezar en 1 (0 reservado para "desconocido")
 
     // ← NUEVO MÉTODO AUXILIAR
     bool isLiteral(const std::string &var);

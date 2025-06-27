@@ -61,16 +61,16 @@ getPet:
     # IF t0 == 0 GOTO L0
     beq $t2, $zero, L0
     # ALLOCATE Animal -> t2
-    li $t2, 0
-    # Object of type Animal allocated
+    li $t2, 1
+    # Object of type Animal allocated with ID 1
     # SETATTR t2.vtable = vtable_Animal
     # VTable set for object t2
     # Temporal assignment: t1 = t2 (register only)
     j L1
 L0:
     # ALLOCATE Dog -> t3
-    li $t2, 0
-    # Object of type Dog allocated
+    li $t2, 2
+    # Object of type Dog allocated with ID 2
     # SETATTR t3.vtable = vtable_Dog
     # VTable set for object t3
     # Temporal assignment: t1 = t3 (register only)
@@ -132,7 +132,6 @@ main:
 sound_polymorphic:
     # Polymorphic dispatcher for sound method
     # $a0 contains object with type info
-    # Object type: 1=A, 2=B
     
     # Prolog for dispatcher
     addi $sp, $sp, -16

@@ -11,8 +11,8 @@ _start:
     li $v0, 10
     syscall
 
-    # DEBUG: Discovered method: bombardilocrocodilo
-    # DEBUG: Discovered method: bombardilocrocodilo
+    # DEBUG: Discovered method: makeSound
+    # DEBUG: Discovered method: makeSound
 f0:
     # Function: f0
     # Prolog
@@ -22,7 +22,7 @@ f0:
     move $fp, $sp
     # PARAM self at offset 4
     sw $a0, 4($fp)  # self
-    li $v0, 5
+    li $v0, 1
     # Epilog
     lw $ra, 60($sp)
     lw $fp, 56($sp)
@@ -38,40 +38,56 @@ f1:
     move $fp, $sp
     # PARAM self at offset 4
     sw $a0, 4($fp)  # self
-    li $v0, 10
+    li $v0, 2
     # Epilog
     lw $ra, 60($sp)
     lw $fp, 56($sp)
     addi $sp, $sp, 64
     jr $ra
 
-bar:
-    # Function: bar
+f2:
+    # Function: f2
     # Prolog
     addi $sp, $sp, -64
     sw $ra, 60($sp)
     sw $fp, 56($sp)
     move $fp, $sp
-    sw $a0, 4($fp)  # x
-    # Binary operation: t0 = x > 5.000000
+    # PARAM self at offset 4
+    sw $a0, 4($fp)  # self
+    li $v0, 3
+    # Epilog
+    lw $ra, 60($sp)
+    lw $fp, 56($sp)
+    addi $sp, $sp, 64
+    jr $ra
+
+createPet:
+    # Function: createPet
+    # Prolog
+    addi $sp, $sp, -64
+    sw $ra, 60($sp)
+    sw $fp, 56($sp)
+    move $fp, $sp
+    sw $a0, 4($fp)  # pet_type
+    # Binary operation: t0 = pet_type == 1.000000
     lw $t0, 4($fp)
-    li $t1, 5
-    sgt $t2, $t0, $t1
+    li $t1, 1
+    seq $t2, $t0, $t1
     # Temporal t0 result stored in $t2
     # IF t0 == 0 GOTO L0
     beq $t2, $zero, L0
-    # ALLOCATE A -> t2
+    # ALLOCATE Dog -> t2
     li $t2, 1
-    # Object of type A allocated with ID 1
-    # SETATTR t2.vtable = vtable_A
+    # Object of type Dog allocated with ID 1
+    # SETATTR t2.vtable = vtable_Dog
     # VTable set for object t2
     # Temporal assignment: t1 = t2 (register only)
     j L1
 L0:
-    # ALLOCATE B -> t3
+    # ALLOCATE Cat -> t3
     li $t2, 2
-    # Object of type B allocated with ID 2
-    # SETATTR t3.vtable = vtable_B
+    # Object of type Cat allocated with ID 2
+    # SETATTR t3.vtable = vtable_Cat
     # VTable set for object t3
     # Temporal assignment: t1 = t3 (register only)
 L1:
@@ -90,30 +106,30 @@ main:
     sw $ra, 60($sp)
     sw $fp, 56($sp)
     move $fp, $sp
-    li $a0, 5
-    jal bar
-    # VCALL: t5 = t4.bombardilocrocodilo()
+    li $a0, 1
+    jal createPet
+    # VCALL: t5 = t4.makeSound()
     # Object in temporal t4, using previous result
     move $t0, $v0
-    # Polymorphic call to bombardilocrocodilo method
+    # Polymorphic call to makeSound method
     # Check object type and call appropriate method
     move $a0, $t0
-    jal bombardilocrocodilo_polymorphic
+    jal makeSound_polymorphic
     move $a0, $v0
     li $v0, 1
     syscall
     li $a0, 10
     li $v0, 11
     syscall
-    li $a0, 6
-    jal bar
-    # VCALL: t8 = t7.bombardilocrocodilo()
+    li $a0, 2
+    jal createPet
+    # VCALL: t8 = t7.makeSound()
     # Object in temporal t7, using previous result
     move $t0, $v0
-    # Polymorphic call to bombardilocrocodilo method
+    # Polymorphic call to makeSound method
     # Check object type and call appropriate method
     move $a0, $t0
-    jal bombardilocrocodilo_polymorphic
+    jal makeSound_polymorphic
     move $a0, $v0
     li $v0, 1
     syscall
@@ -129,8 +145,8 @@ main:
 
 
 # Polymorphic dispatch functions
-bombardilocrocodilo_polymorphic:
-    # Polymorphic dispatcher for bombardilocrocodilo method
+makeSound_polymorphic:
+    # Polymorphic dispatcher for makeSound method
     # $a0 contains object with type info
     
     # Prolog for dispatcher
@@ -141,23 +157,29 @@ bombardilocrocodilo_polymorphic:
     
     # Check object type
     li $t1, 1
-    beq $a0, $t1, bombardilocrocodilo_call_f0
+    beq $a0, $t1, makeSound_call_f0
     li $t1, 2
-    beq $a0, $t1, bombardilocrocodilo_call_f1
+    beq $a0, $t1, makeSound_call_f1
+    li $t1, 3
+    beq $a0, $t1, makeSound_call_f2
     
     # Default case - should not happen
     li $v0, 0
-    j bombardilocrocodilo_dispatcher_end
+    j makeSound_dispatcher_end
     
-bombardilocrocodilo_call_f0:
+makeSound_call_f0:
     jal f0
-    j bombardilocrocodilo_dispatcher_end
+    j makeSound_dispatcher_end
     
-bombardilocrocodilo_call_f1:
+makeSound_call_f1:
     jal f1
-    j bombardilocrocodilo_dispatcher_end
+    j makeSound_dispatcher_end
     
-bombardilocrocodilo_dispatcher_end:
+makeSound_call_f2:
+    jal f2
+    j makeSound_dispatcher_end
+    
+makeSound_dispatcher_end:
     # Epilog for dispatcher
     lw $ra, 12($sp)
     lw $fp, 8($sp)

@@ -40,6 +40,9 @@ private:
     std::unordered_map<std::string, int> type_ids; // tipo -> ID único
     int next_type_id = 1;                          // empezar en 1 (0 reservado para "desconocido")
 
+    // ← NUEVO: Rastreo de tipos de temporales
+    std::unordered_map<std::string, std::string> temporal_types; // temporal -> "int" | "string" | "object"
+
     // ← NUEVO MÉTODO AUXILIAR
     bool isLiteral(const std::string &var);
 

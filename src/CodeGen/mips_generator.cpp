@@ -150,7 +150,8 @@ void MIPSGenerator::processTypesSection(const std::string &line)
     {
         current_type = type_match[1].str();
         // ARREGLO DEL BUG: Asignar ID de tipo en el orden de declaración
-        if (type_ids.find(current_type) == type_ids.end()) {
+        if (type_ids.find(current_type) == type_ids.end())
+        {
             type_ids[current_type] = next_type_id++;
             emitComment("DEBUG: Assigned ID " + std::to_string(type_ids[current_type]) + " to type " + current_type);
         }
@@ -166,15 +167,18 @@ void MIPSGenerator::processTypesSection(const std::string &line)
         std::string function_name = method_match[2].str();
 
         // ARREGLO DEL BUG: Asociar el método con el tipo correcto y su función
-        if (!current_type.empty()) {
+        if (!current_type.empty())
+        {
             // Crear mapeo directo tipo -> función para cada método
             type_to_method_function[current_type][method_name] = function_name;
             // DEBUG: Agregar comentario para verificar mapeo
             emitComment("DEBUG: Mapping " + current_type + "." + method_name + " -> " + function_name);
-        } else {
+        }
+        else
+        {
             emitComment("DEBUG: ERROR - No current_type for method " + method_name);
         }
-        
+
         // Mantener la lista para compatibilidad (pero no se usará para el dispatcher)
         method_to_functions[method_name].push_back(function_name);
 
@@ -624,6 +628,12 @@ void MIPSGenerator::translateCILInstruction(const std::string &line,
             {
                 emitInstruction("lw $v0, " + std::to_string(local_vars[value]) + "($fp)");
             }
+            else if (string_labels.find(value) != string_labels.end())
+            {
+                // Si es una etiqueta de string, cargar su dirección
+                emitComment("Loading string address for " + value);
+                emitInstruction("la $v0, " + value);
+            }
             else
             {
                 emitComment("Error: Return value " + value + " not found");
@@ -805,6 +815,13 @@ void MIPSGenerator::translateCILInstruction(const std::string &line,
                 if (value.find("t") == 0)
                 {
                     emitInstruction("move $a0, $v0"); // Usar resultado de llamada anterior
+                    // Por defecto, usar print_int para temporales (los strings se manejan explícitamente)
+                    emitInstruction("li $v0, 1"); // print_int
+                    emitInstruction("syscall");
+                    emitInstruction("li $a0, 10"); // newline
+                    emitInstruction("li $v0, 11"); // print_char
+                    emitInstruction("syscall");
+                    return;
                 }
                 else if (string_labels.find(value) != string_labels.end())
                 {
@@ -1108,15 +1125,17 @@ void MIPSGenerator::generatePolymorphicDispatchers(std::ostringstream &result)
         result << "    # Check object type\n";
 
         // ARREGLO DEL BUG: Generar casos basado en el mapeo tipo -> ID correcto
-        for (const auto &type_entry : type_to_method_function) {
+        for (const auto &type_entry : type_to_method_function)
+        {
             const std::string &type_name = type_entry.first;
             const auto &methods = type_entry.second;
-            
+
             // Solo procesar si este tipo tiene el método que estamos generando
-            if (methods.find(method_name) != methods.end()) {
+            if (methods.find(method_name) != methods.end())
+            {
                 int type_id = type_ids[type_name];
                 const std::string &function_name = methods.at(method_name);
-                
+
                 result << "    # DEBUG: Type " << type_name << " (ID " << type_id << ") -> " << function_name << "\n";
                 result << "    li $t1, " << type_id << "\n";
                 result << "    beq $a0, $t1, " << method_name << "_call_" << function_name << "\n";
@@ -1130,14 +1149,15 @@ void MIPSGenerator::generatePolymorphicDispatchers(std::ostringstream &result)
         result << "    \n";
 
         // ARREGLO DEL BUG: Generar las etiquetas de llamada basado en el mapeo correcto
-        for (const auto &type_entry : type_to_method_function) {
-            const std::string &type_name = type_entry.first;
+        for (const auto &type_entry : type_to_method_function)
+        {
             const auto &methods = type_entry.second;
-            
+
             // Solo procesar si este tipo tiene el método que estamos generando
-            if (methods.find(method_name) != methods.end()) {
+            if (methods.find(method_name) != methods.end())
+            {
                 const std::string &function_name = methods.at(method_name);
-                
+
                 result << method_name << "_call_" << function_name << ":\n";
                 result << "    jal " << function_name << "\n";
                 result << "    j " << method_name << "_dispatcher_end\n";
@@ -1164,7 +1184,7 @@ int MIPSGenerator::getTypeId(const std::string &type)
         return type_ids[type];
     }
 
-    // Si por alguna razón no se asignó en processTypesSection, 
+    // Si por alguna razón no se asignó en processTypesSection,
     // asignar uno nuevo (esto no debería pasar en condiciones normales)
     int id = next_type_id++;
     type_ids[type] = id;

@@ -1,0 +1,30 @@
+// Test 6: Múltiples tipos con nombres de métodos únicos
+type Shape {
+  calculateArea() => 0;
+}
+
+type Circle inherits Shape {
+  calculateArea() => 314; // Simulando 3.14 * 10 * 10
+}
+
+type Rectangle inherits Shape {
+  calculateArea() => 200; // Simulando 20 * 10
+}
+
+type Triangle inherits Shape {
+  calculateArea() => 50; // Simulando (10 * 10) / 2
+}
+
+function getShape(id) {
+  if (id == 1) {
+    new Circle();
+  } else if (id == 2) {
+    new Rectangle();
+  } else {
+    new Triangle();
+  };
+}
+
+print(getShape(1).calculateArea());
+print(getShape(2).calculateArea());
+print(getShape(3).calculateArea());

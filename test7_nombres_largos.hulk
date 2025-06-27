@@ -1,0 +1,19 @@
+// Test 7: Tipos con nombres muy largos
+type SuperLongTypeName {
+  veryLongMethodNameThatShouldWork() => 123;
+}
+
+type AnotherSuperLongTypeNameThatInherits inherits SuperLongTypeName {
+  veryLongMethodNameThatShouldWork() => 456;
+}
+
+function createLongNamedObject(x) {
+  if (x > 0) {
+    new AnotherSuperLongTypeNameThatInherits();
+  } else {
+    new SuperLongTypeName();
+  };
+}
+
+print(createLongNamedObject(1).veryLongMethodNameThatShouldWork());
+print(createLongNamedObject(-1).veryLongMethodNameThatShouldWork());

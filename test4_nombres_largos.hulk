@@ -1,0 +1,27 @@
+type MathematicalOperation {
+  calculateComplexResult() => 1;
+}
+
+type AdvancedCalculation inherits MathematicalOperation {
+  calculateComplexResult() => 42;
+}
+
+type UltraAdvancedCalculation inherits AdvancedCalculation {
+  calculateComplexResult() => 999;
+}
+
+function getCalculator(complexity) {
+  if (complexity > 10) {
+    new UltraAdvancedCalculation();
+  } else {
+    if (complexity > 5) {
+      new AdvancedCalculation();
+    } else {
+      new MathematicalOperation();
+    };
+  };
+}
+
+print(getCalculator(3).calculateComplexResult());
+print(getCalculator(7).calculateComplexResult());
+print(getCalculator(15).calculateComplexResult());

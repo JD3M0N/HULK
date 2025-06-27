@@ -1,0 +1,27 @@
+type Vehicle {
+  move() => "Moving";
+}
+
+type Car inherits Vehicle {
+  move() => "Driving on road";
+}
+
+type SportsCar inherits Car {
+  move() => "Racing fast!";
+}
+
+function getVehicle(level) {
+  if (level == 1) {
+    new Vehicle();
+  } else {
+    if (level == 2) {
+      new Car();
+    } else {
+      new SportsCar();
+    };
+  };
+}
+
+print(getVehicle(1).move());
+print(getVehicle(2).move());
+print(getVehicle(3).move());

@@ -868,21 +868,11 @@ void MIPSGenerator::translateCILInstruction(const std::string &line,
 
         emitComment("ALLOCATE " + type + " -> " + dest);
 
-        // Simular creación de objeto con ID único para el tipo
-        if (type == "A")
-        {
-            emitInstruction("li $t2, 1"); // ID tipo A = 1
-        }
-        else if (type == "B")
-        {
-            emitInstruction("li $t2, 2"); // ID tipo B = 2
-        }
-        else
-        {
-            emitInstruction("li $t2, 0"); // Tipo desconocido
-        }
+        // Obtener ID único para el tipo dinámicamente
+        int type_id = getTypeId(type);
+        emitInstruction("li $t2, " + std::to_string(type_id)); // ID dinámico del tipo
 
-        emitComment("Object of type " + type + " allocated");
+        emitComment("Object of type " + type + " allocated with ID " + std::to_string(type_id));
         return;
     }
 
@@ -1102,4 +1092,19 @@ void MIPSGenerator::generatePolymorphicDispatchers(std::ostringstream &result)
         result << "    jr $ra\n";
         result << "\n";
     }
+}
+
+// ← NUEVO: Implementación de getTypeId
+int MIPSGenerator::getTypeId(const std::string &type)
+{
+    // Si el tipo ya tiene un ID asignado, lo devolvemos
+    if (type_ids.find(type) != type_ids.end())
+    {
+        return type_ids[type];
+    }
+    
+    // Si es un tipo nuevo, le asignamos un ID único
+    int id = next_type_id++;
+    type_ids[type] = id;
+    return id;
 }

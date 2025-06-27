@@ -1,0 +1,44 @@
+// Test 9: Árbol de herencia con múltiples ramas
+type Living {
+  isAlive() => 1;
+}
+
+type Plant inherits Living {
+  isAlive() => 2;
+  photosynthesize() => 100;
+}
+
+type Animal inherits Living {
+  isAlive() => 3;
+  breathe() => 200;
+}
+
+type Tree inherits Plant {
+  isAlive() => 4;
+  photosynthesize() => 150;
+}
+
+type Mammal inherits Animal {
+  isAlive() => 5;
+  breathe() => 250;
+}
+
+function createLiving(type) {
+  if (type == 1) {
+    new Tree();
+  } else if (type == 2) {
+    new Mammal();
+  } else if (type == 3) {
+    new Plant();
+  } else if (type == 4) {
+    new Animal();
+  } else {
+    new Living();
+  };
+}
+
+print(createLiving(1).isAlive());
+print(createLiving(2).isAlive());
+print(createLiving(3).isAlive());
+print(createLiving(4).isAlive());
+print(createLiving(5).isAlive());

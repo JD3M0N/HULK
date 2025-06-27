@@ -1,0 +1,40 @@
+// Test 8: Múltiples métodos en cada tipo
+type Employee {
+  getName() => 1;
+  getSalary() => 1000;
+  getRole() => 0;
+}
+
+type Manager inherits Employee {
+  getName() => 2;
+  getSalary() => 5000;
+  getRole() => 1;
+}
+
+type Developer inherits Employee {
+  getName() => 3;
+  getSalary() => 4000;
+  getRole() => 2;
+}
+
+function createEmployee(type) {
+  if (type == 1) {
+    new Manager();
+  } else if (type == 2) {
+    new Developer();
+  } else {
+    new Employee();
+  };
+}
+
+let emp1 = createEmployee(1) in {
+  print(emp1.getName());
+  print(emp1.getSalary());
+  print(emp1.getRole());
+};
+
+let emp2 = createEmployee(2) in {
+  print(emp2.getName());
+  print(emp2.getSalary());
+  print(emp2.getRole());
+};

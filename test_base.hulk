@@ -1,0 +1,18 @@
+type A {
+  bombardilocrocodilo() => 5;
+}
+
+type B inherits A {
+  bombardilocrocodilo() => 10;
+}
+
+function bar(x) {
+  if (x > 5) {
+    new A();
+  } else {
+    new B();
+  };
+}
+
+print(bar(5).bombardilocrocodilo());
+print(bar(6).bombardilocrocodilo());

@@ -11,8 +11,8 @@ _start:
     li $v0, 10
     syscall
 
-    # DEBUG: Discovered method: bombardilocrocodilo
-    # DEBUG: Discovered method: bombardilocrocodilo
+    # DEBUG: Discovered method: sound
+    # DEBUG: Discovered method: sound
 f0:
     # Function: f0
     # Prolog
@@ -22,7 +22,7 @@ f0:
     move $fp, $sp
     # PARAM self at offset 4
     sw $a0, 4($fp)  # self
-    li $v0, 5
+    li $v0, 1
     # Epilog
     lw $ra, 60($sp)
     lw $fp, 56($sp)
@@ -38,15 +38,15 @@ f1:
     move $fp, $sp
     # PARAM self at offset 4
     sw $a0, 4($fp)  # self
-    li $v0, 10
+    li $v0, 2
     # Epilog
     lw $ra, 60($sp)
     lw $fp, 56($sp)
     addi $sp, $sp, 64
     jr $ra
 
-bar:
-    # Function: bar
+getPet:
+    # Function: getPet
     # Prolog
     addi $sp, $sp, -64
     sw $ra, 60($sp)
@@ -60,18 +60,18 @@ bar:
     # Temporal t0 result stored in $t2
     # IF t0 == 0 GOTO L0
     beq $t2, $zero, L0
-    # ALLOCATE A -> t2
-    li $t2, 1
-    # Object of type A allocated with ID 1
-    # SETATTR t2.vtable = vtable_A
+    # ALLOCATE Animal -> t2
+    li $t2, 0
+    # Object of type Animal allocated
+    # SETATTR t2.vtable = vtable_Animal
     # VTable set for object t2
     # Temporal assignment: t1 = t2 (register only)
     j L1
 L0:
-    # ALLOCATE B -> t3
-    li $t2, 2
-    # Object of type B allocated with ID 2
-    # SETATTR t3.vtable = vtable_B
+    # ALLOCATE Dog -> t3
+    li $t2, 0
+    # Object of type Dog allocated
+    # SETATTR t3.vtable = vtable_Dog
     # VTable set for object t3
     # Temporal assignment: t1 = t3 (register only)
 L1:
@@ -91,14 +91,14 @@ main:
     sw $fp, 56($sp)
     move $fp, $sp
     li $a0, 5
-    jal bar
-    # VCALL: t5 = t4.bombardilocrocodilo()
+    jal getPet
+    # VCALL: t5 = t4.sound()
     # Object in temporal t4, using previous result
     move $t0, $v0
-    # Polymorphic call to bombardilocrocodilo method
+    # Polymorphic call to sound method
     # Check object type and call appropriate method
     move $a0, $t0
-    jal bombardilocrocodilo_polymorphic
+    jal sound_polymorphic
     move $a0, $v0
     li $v0, 1
     syscall
@@ -106,14 +106,14 @@ main:
     li $v0, 11
     syscall
     li $a0, 6
-    jal bar
-    # VCALL: t8 = t7.bombardilocrocodilo()
+    jal getPet
+    # VCALL: t8 = t7.sound()
     # Object in temporal t7, using previous result
     move $t0, $v0
-    # Polymorphic call to bombardilocrocodilo method
+    # Polymorphic call to sound method
     # Check object type and call appropriate method
     move $a0, $t0
-    jal bombardilocrocodilo_polymorphic
+    jal sound_polymorphic
     move $a0, $v0
     li $v0, 1
     syscall
@@ -129,8 +129,8 @@ main:
 
 
 # Polymorphic dispatch functions
-bombardilocrocodilo_polymorphic:
-    # Polymorphic dispatcher for bombardilocrocodilo method
+sound_polymorphic:
+    # Polymorphic dispatcher for sound method
     # $a0 contains object with type info
     # Object type: 1=A, 2=B
     
@@ -142,23 +142,23 @@ bombardilocrocodilo_polymorphic:
     
     # Check object type
     li $t1, 1
-    beq $a0, $t1, bombardilocrocodilo_call_f0
+    beq $a0, $t1, sound_call_f0
     li $t1, 2
-    beq $a0, $t1, bombardilocrocodilo_call_f1
+    beq $a0, $t1, sound_call_f1
     
     # Default case - should not happen
     li $v0, 0
-    j bombardilocrocodilo_dispatcher_end
+    j sound_dispatcher_end
     
-bombardilocrocodilo_call_f0:
+sound_call_f0:
     jal f0
-    j bombardilocrocodilo_dispatcher_end
+    j sound_dispatcher_end
     
-bombardilocrocodilo_call_f1:
+sound_call_f1:
     jal f1
-    j bombardilocrocodilo_dispatcher_end
+    j sound_dispatcher_end
     
-bombardilocrocodilo_dispatcher_end:
+sound_dispatcher_end:
     # Epilog for dispatcher
     lw $ra, 12($sp)
     lw $fp, 8($sp)

@@ -1,0 +1,22 @@
+type Animal {
+  makeSound() => 1;
+}
+
+type Dog inherits Animal {
+  makeSound() => 2;
+}
+
+type Cat inherits Animal {
+  makeSound() => 3;
+}
+
+function createPet(type) {
+  if (type == 1) {
+    new Dog();
+  } else {
+    new Cat();
+  };
+}
+
+print(createPet(1).makeSound());
+print(createPet(2).makeSound());

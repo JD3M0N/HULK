@@ -1,0 +1,18 @@
+type Animal {
+  sound() => 1;
+}
+
+type Dog inherits Animal {
+  sound() => 2;
+}
+
+function getPet(x) {
+  if (x > 5) {
+    new Animal();
+  } else {
+    new Dog();
+  };
+}
+
+print(getPet(5).sound());
+print(getPet(6).sound());

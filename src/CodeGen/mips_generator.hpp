@@ -32,6 +32,10 @@ private:
     std::unordered_map<std::string, std::vector<std::string>> method_to_functions; // método -> [f0, f1, ...]
     std::set<std::string> discovered_methods;                                      // métodos encontrados en VCALL
 
+    // ← NUEVO: Gestión dinámica de IDs de tipos
+    std::unordered_map<std::string, int> type_ids;                                 // tipo -> ID único
+    int next_type_id = 1;                                                           // empezar en 1 (0 reservado para "desconocido")
+
     // ← NUEVO MÉTODO AUXILIAR
     bool isLiteral(const std::string &var);
 
@@ -79,6 +83,9 @@ public:
     void generateArrayAllocation(const std::string &dest, const std::string &size);
     void generateGetAttribute(const std::string &dest, const std::string &obj, const std::string &attr);
     void generateSetAttribute(const std::string &obj, const std::string &attr, const std::string &value);
+
+    // ← NUEVO: Gestión de IDs de tipos
+    int getTypeId(const std::string &type);
 
     // ← NUEVO: Generación dinámica de dispatchers polimórficos
     void generatePolymorphicDispatchers(std::ostringstream &result);

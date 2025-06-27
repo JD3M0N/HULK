@@ -1,0 +1,40 @@
+type Employee {
+  work() => 8;
+}
+
+type Developer inherits Employee {
+  work() => 12;
+}
+
+type Manager inherits Employee {
+  work() => 6;
+}
+
+type Artist {
+  create() => 5;
+}
+
+type GraphicDesigner inherits Artist {
+  create() => 10;
+}
+
+function getWorker(type) {
+  if (type == 1) {
+    new Developer();
+  } else {
+    new Manager();
+  };
+}
+
+function getCreator(type) {
+  if (type == 1) {
+    new Artist();
+  } else {
+    new GraphicDesigner();
+  };
+}
+
+print(getWorker(1).work());
+print(getWorker(2).work());
+print(getCreator(1).create());
+print(getCreator(2).create());

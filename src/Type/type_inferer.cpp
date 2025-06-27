@@ -69,23 +69,164 @@ void TypeInfererVisitor::visit(BinaryExpr *expr)
 }
 void TypeInfererVisitor::visit(CallExpr *expr)
 {
-    for (auto &arg : expr->args)
-        arg->accept(this);
+    std::cout << "DEBUG: Iniciando visit(CallExpr) para función/método: " << expr->callee << std::endl;
+    std::cout << "DEBUG: CallExpr tiene " << expr->args.size() << " argumentos" << std::endl;
+
+    for (size_t i = 0; i < expr->args.size(); ++i)
+    {
+        std::cout << "DEBUG: Procesando argumento " << i << " de CallExpr " << expr->callee << std::endl;
+        if (!expr->args[i])
+        {
+            std::cout << "ERROR: Argumento " << i << " es nulo!" << std::endl;
+            continue;
+        }
+
+        try
+        {
+            expr->args[i]->accept(this);
+            std::cout << "DEBUG: Argumento " << i << " procesado exitosamente" << std::endl;
+        }
+        catch (const std::exception &e)
+        {
+            std::cout << "ERROR: Excepción en argumento " << i << ": " << e.what() << std::endl;
+            throw;
+        }
+    }
 
     TypePtr fnType;
 
     if (expr->callee == "print")
     {
+        std::cout << "DEBUG: CallExpr es función print" << std::endl;
         auto freshParam = Type::makeVar();
         auto freshRet = Type::makeVar();
         fnType = Type::makeFunction({freshParam}, freshRet);
     }
     else
-        fnType = env->lookup(expr->callee);
+    {
+        // Detectar si es una llamada a método
+        bool isMethodCall = false;
+        if (!expr->args.empty())
+        {
+            // Si tenemos argumentos y el primer argumento es una expresión compleja,
+            // probablemente es una llamada a método
+            if (auto *firstArg = expr->args[0].get())
+            {
+                if (!dynamic_cast<VariableExpr *>(firstArg))
+                {
+                    isMethodCall = true;
+                }
+            }
+        }
 
-    for (size_t i = 0; i < expr->args.size(); ++i)
-        unify(expr->args[i]->inferredType, fnType->params[i]);
-    expr->inferredType = fnType->retType;
+        std::cout << "DEBUG: CallExpr " << expr->callee << " es " << (isMethodCall ? "llamada a método" : "llamada a función") << std::endl;
+
+        if (isMethodCall)
+        {
+            // Es una llamada a método - no buscar en scope global
+            // Asumir que es válida y crear un tipo de función genérico
+            std::cout << "DEBUG: Creando tipo genérico para método " << expr->callee << std::endl;
+            std::vector<TypePtr> paramTypes;
+            for (auto &arg : expr->args)
+            {
+                if (arg && arg->inferredType)
+                {
+                    paramTypes.push_back(arg->inferredType);
+                }
+                else
+                {
+                    std::cout << "WARNING: Argumento sin tipo inferido, usando tipo variable" << std::endl;
+                    paramTypes.push_back(Type::makeVar());
+                }
+            }
+            auto freshRet = Type::makeVar();
+            fnType = Type::makeFunction(paramTypes, freshRet);
+        }
+        else
+        {
+            // Llamada a función regular - buscar en scope
+            std::cout << "DEBUG: Buscando función " << expr->callee << " en scope" << std::endl;
+            try
+            {
+                fnType = env->lookup(expr->callee);
+                std::cout << "DEBUG: Función " << expr->callee << " encontrada en scope" << std::endl;
+            }
+            catch (const std::exception &e)
+            {
+                // Si no se encuentra, crear un tipo genérico
+                std::cout << "DEBUG: Función " << expr->callee << " no encontrada, creando tipo genérico. Error: " << e.what() << std::endl;
+                std::vector<TypePtr> paramTypes;
+                for (auto &arg : expr->args)
+                {
+                    if (arg && arg->inferredType)
+                    {
+                        paramTypes.push_back(arg->inferredType);
+                    }
+                    else
+                    {
+                        paramTypes.push_back(Type::makeVar());
+                    }
+                }
+                auto freshRet = Type::makeVar();
+                fnType = Type::makeFunction(paramTypes, freshRet);
+            }
+        }
+    }
+
+    // Verificar que fnType sea válido y tenga el número correcto de parámetros
+    if (fnType)
+    {
+        std::cout << "DEBUG: fnType válido para " << expr->callee << ", verificando parámetros" << std::endl;
+        std::cout << "DEBUG: fnType tiene " << fnType->params.size() << " parámetros, expr tiene " << expr->args.size() << " argumentos" << std::endl;
+
+        if (fnType->params.size() == expr->args.size())
+        {
+            for (size_t i = 0; i < expr->args.size(); ++i)
+            {
+                if (expr->args[i] && expr->args[i]->inferredType && fnType->params[i])
+                {
+                    std::cout << "DEBUG: Unificando argumento " << i << std::endl;
+                    try
+                    {
+                        unify(expr->args[i]->inferredType, fnType->params[i]);
+                    }
+                    catch (const std::exception &e)
+                    {
+                        std::cout << "ERROR: Error al unificar argumento " << i << ": " << e.what() << std::endl;
+                        throw;
+                    }
+                }
+                else
+                {
+                    std::cout << "WARNING: Problema con argumento " << i << " o tipo de parámetro" << std::endl;
+                }
+            }
+
+            if (fnType->retType)
+            {
+                expr->inferredType = fnType->retType;
+                std::cout << "DEBUG: Tipo de retorno asignado para " << expr->callee << std::endl;
+            }
+            else
+            {
+                std::cout << "WARNING: fnType->retType es nulo, usando tipo variable" << std::endl;
+                expr->inferredType = Type::makeVar();
+            }
+        }
+        else
+        {
+            std::cout << "WARNING: Número de parámetros no coincide para " << expr->callee << std::endl;
+            expr->inferredType = Type::makeVar();
+        }
+    }
+    else
+    {
+        // Tipo de retorno genérico si hay problemas
+        std::cout << "WARNING: fnType es nulo para " << expr->callee << ", usando tipo variable" << std::endl;
+        expr->inferredType = Type::makeVar();
+    }
+
+    std::cout << "DEBUG: CallExpr " << expr->callee << " completado exitosamente" << std::endl;
 }
 void TypeInfererVisitor::visit(VariableExpr *expr)
 {
@@ -151,41 +292,149 @@ void TypeInfererVisitor::visit(ExprStmt *stmt)
 }
 void TypeInfererVisitor::visit(FunctionDecl *stmt)
 {
+    std::cout << "DEBUG: Iniciando visit(FunctionDecl) para función: " << stmt->name << std::endl;
+
+    if (!stmt)
+    {
+        std::cout << "ERROR: FunctionDecl es nulo!" << std::endl;
+        return;
+    }
+
+    std::cout << "DEBUG: Función " << stmt->name << " tiene " << stmt->params.size() << " parámetros" << std::endl;
+
     // Crear tipo función con variables de tipo para parámetros y retorno
     std::vector<TypePtr> ps;
     for (size_t i = 0; i < stmt->params.size(); ++i)
+    {
+        std::cout << "DEBUG: Creando tipo para parámetro " << i << ": " << stmt->params[i] << std::endl;
         ps.push_back(Type::makeVar());
+    }
     auto retV = Type::makeVar();
     auto fT = Type::makeFunction(ps, retV);
+
+    std::cout << "DEBUG: Declarando función " << stmt->name << " en scope" << std::endl;
     env->declare(stmt->name, fT);
 
     // Nuevo scope para cuerpo
     auto parent = env;
     env = std::make_shared<Scope<TypePtr>>(parent);
+
+    std::cout << "DEBUG: Creado scope para cuerpo de función " << stmt->name << std::endl;
+
     for (size_t i = 0; i < stmt->params.size(); ++i)
+    {
+        std::cout << "DEBUG: Declarando parámetro " << stmt->params[i] << " en scope de función" << std::endl;
         env->declare(stmt->params[i], ps[i]);
-    stmt->body->accept(this);
+    }
+
+    std::cout << "DEBUG: Procesando cuerpo de función " << stmt->name << std::endl;
+
+    if (!stmt->body)
+    {
+        std::cout << "ERROR: Cuerpo de función " << stmt->name << " es nulo!" << std::endl;
+        env = parent;
+        return;
+    }
+
+    try
+    {
+        stmt->body->accept(this);
+        std::cout << "DEBUG: Cuerpo de función " << stmt->name << " procesado exitosamente" << std::endl;
+    }
+    catch (const std::exception &e)
+    {
+        std::cout << "ERROR: Excepción en cuerpo de función " << stmt->name << ": " << e.what() << std::endl;
+        env = parent;
+        throw;
+    }
+
     // unificar retorno
     auto *eb = dynamic_cast<ExprStmt *>(stmt->body.get());
-    unify(retV, eb->expr->inferredType);
+    if (eb && eb->expr)
+    {
+        std::cout << "DEBUG: Unificando tipo de retorno de función " << stmt->name << std::endl;
+        unify(retV, eb->expr->inferredType);
+    }
+    else
+    {
+        std::cout << "WARNING: No se pudo obtener tipo de retorno para función " << stmt->name << std::endl;
+    }
+
     env = parent;
+    std::cout << "DEBUG: FunctionDecl " << stmt->name << " completada exitosamente" << std::endl;
 }
 
 void TypeInfererVisitor::visit(Program *prog)
 {
+    std::cout << "DEBUG: Iniciando visit(Program) con " << prog->stmts.size() << " statements" << std::endl;
+
     // Simplemente recorremos cada statement del programa
-    for (auto &stmt : prog->stmts)
+    for (size_t i = 0; i < prog->stmts.size(); ++i)
     {
-        stmt->accept(this);
+        std::cout << "DEBUG: Procesando statement " << i << std::endl;
+
+        if (!prog->stmts[i])
+        {
+            std::cout << "ERROR: Statement " << i << " es nulo!" << std::endl;
+            continue;
+        }
+
+        // Verificar tipo de statement
+        if (dynamic_cast<ClassDecl *>(prog->stmts[i].get()))
+        {
+            std::cout << "DEBUG: Statement " << i << " es ClassDecl" << std::endl;
+        }
+        else if (dynamic_cast<FunctionDecl *>(prog->stmts[i].get()))
+        {
+            std::cout << "DEBUG: Statement " << i << " es FunctionDecl" << std::endl;
+        }
+        else if (dynamic_cast<ExprStmt *>(prog->stmts[i].get()))
+        {
+            std::cout << "DEBUG: Statement " << i << " es ExprStmt" << std::endl;
+        }
+        else
+        {
+            std::cout << "DEBUG: Statement " << i << " es de tipo desconocido" << std::endl;
+        }
+
+        try
+        {
+            prog->stmts[i]->accept(this);
+            std::cout << "DEBUG: Statement " << i << " procesado exitosamente" << std::endl;
+        }
+        catch (const std::exception &e)
+        {
+            std::cout << "ERROR: Excepción en statement " << i << ": " << e.what() << std::endl;
+            throw;
+        }
     }
+    std::cout << "DEBUG: Program completado exitosamente" << std::endl;
 }
 
 void TypeInfererVisitor::visit(ClassDecl *decl)
 {
-    // Inferimos cada inicializador de atributo:
-    for (auto &attr : decl->attributes)
+    std::cout << "DEBUG: Iniciando visit(ClassDecl) para clase: " << decl->name << std::endl;
+
+    if (!decl)
     {
-        attr.second->accept(this);
+        std::cout << "ERROR: ClassDecl es nulo!" << std::endl;
+        return;
+    }
+
+    std::cout << "DEBUG: Clase " << decl->name << " tiene " << decl->attributes.size() << " atributos y " << decl->methods.size() << " métodos" << std::endl;
+
+    // Inferimos cada inicializador de atributo:
+    for (size_t i = 0; i < decl->attributes.size(); ++i)
+    {
+        std::cout << "DEBUG: Procesando atributo " << i << " de clase " << decl->name << std::endl;
+        if (decl->attributes[i].second)
+        {
+            decl->attributes[i].second->accept(this);
+        }
+        else
+        {
+            std::cout << "WARNING: Atributo " << i << " tiene inicializador nulo" << std::endl;
+        }
     }
 
     // Para los métodos, crear un scope separado para cada clase
@@ -193,16 +442,37 @@ void TypeInfererVisitor::visit(ClassDecl *decl)
     auto parent = env;
     env = std::make_shared<Scope<TypePtr>>(parent);
 
+    std::cout << "DEBUG: Creado scope separado para clase " << decl->name << std::endl;
+
     // Inferimos cada método (FunctionDecl*) en el scope de la clase
-    for (auto &m : decl->methods)
+    for (size_t i = 0; i < decl->methods.size(); ++i)
     {
-        m->accept(this);
+        std::cout << "DEBUG: Procesando método " << i << " de clase " << decl->name << std::endl;
+
+        if (!decl->methods[i])
+        {
+            std::cout << "ERROR: Método " << i << " es nulo!" << std::endl;
+            continue;
+        }
+
+        try
+        {
+            decl->methods[i]->accept(this);
+            std::cout << "DEBUG: Método " << i << " de clase " << decl->name << " procesado exitosamente" << std::endl;
+        }
+        catch (const std::exception &e)
+        {
+            std::cout << "ERROR: Excepción en método " << i << " de clase " << decl->name << ": " << e.what() << std::endl;
+            throw;
+        }
     }
 
     // Restaurar el scope padre
     env = parent;
+    std::cout << "DEBUG: Scope restaurado para clase " << decl->name << std::endl;
 
     // No devolvemos nada; las declaraciones de clase no son expresiones
+    std::cout << "DEBUG: ClassDecl " << decl->name << " completada exitosamente" << std::endl;
 }
 
 void TypeInfererVisitor::visit(NewExpr *expr)

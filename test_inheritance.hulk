@@ -1,18 +1,18 @@
 type A {
-  foo() => 5;
-}
+  foo():Number => 5;
+};
 
 type B inherits A {
-  foo() => 10;
-}
+  foo():Number => 10;
+};
 
-function bar(x) {
+function bar(x:Number):A {
   if (x > 5) {
     new A();
   } else {
     new B();
   };
-}
+};
 
 print(bar(5).foo());
 print(bar(6).foo());

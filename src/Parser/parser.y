@@ -466,6 +466,15 @@ expr:
         $$ = new MemberAccessExpr( ExprPtr($1), std::string($3) );
         free($3);
     }
+    | expr DOT IDENT LPAREN argument_list RPAREN {
+        // Llamada a método: obj.method(args)
+        // Creamos un CallExpr especial donde el objeto está en el primer argumento
+        auto args = std::move(*$5);
+        args.insert(args.begin(), ExprPtr($1)); // El objeto como primer argumento
+        $$ = new CallExpr(std::string($3), std::move(args));
+        free($3);
+        delete $5;
+    }
       | expr DOT IDENT ASSIGN_DESTRUCT expr {
         // ATAJO: expr := MemberAssignExpr(object, member, value)
         $$ = new MemberAssignExpr(

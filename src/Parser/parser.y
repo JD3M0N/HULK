@@ -7,6 +7,14 @@
 #include "../PrintVisitor/print_visitor.hpp"
 #include "../Value/value.hpp"
 
+// Helper function to duplicate a string
+static char* hulk_strdup(const char* s) {
+    if (!s) return nullptr;
+    char* d = (char*)malloc(strlen(s) + 1);
+    if (d) strcpy(d, s);
+    return d;
+}
+
 using ExprPtr = std::unique_ptr<Expr>;
 using ProgramPtr = std::unique_ptr<Program>;
 
@@ -186,7 +194,7 @@ stmt:
 ;    
 
 opt_inherits:
-      /* vacío */            { $$ = strdup("Object"); }
+      /* vacío */            { $$ = hulk_strdup("Object"); }
     | INHERITS IDENT        { $$ = $2; }
 ;
 

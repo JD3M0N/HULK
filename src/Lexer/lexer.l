@@ -9,6 +9,16 @@
 #include <cstring>
 #include <string>
 
+#include "windows_compat.hpp"
+
+// Función auxiliar para duplicar cadenas de forma portable
+static char* hulk_strdup(const char* s) {
+    if (!s) return nullptr;
+    char* d = (char*)malloc(strlen(s) + 1);
+    if (d) strcpy(d, s);
+    return d;
+}
+
 #include "../AST/ast.hpp"
 #include "../Parser/parser.tab.hpp"
 
@@ -67,12 +77,12 @@ TokenLocation current_location;
     if (strcmp(yytext, "type")     == 0) return TYPE;
     if (strcmp(yytext, "inherits") == 0) return INHERITS;
     if (strcmp(yytext, "new")      == 0) return NEW;
-    if (strcmp(yytext, "self")     == 0) { yylval.str = strdup("self"); return SELF; }
-    if (strcmp(yytext, "base")     == 0) { yylval.str = strdup("base"); return BASE; }    
+    if (strcmp(yytext, "self")     == 0) { yylval.str = hulk_strdup("self"); return SELF; }
+    if (strcmp(yytext, "base")     == 0) { yylval.str = hulk_strdup("base"); return BASE; }    
 
 
     // Si no es ninguna palabra reservada, entonces es IDENT
-    yylval.str = strdup(yytext);
+    yylval.str = hulk_strdup(yytext);
     return IDENT;
 }
 

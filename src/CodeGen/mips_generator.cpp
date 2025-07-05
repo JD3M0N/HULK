@@ -446,7 +446,7 @@ void MIPSGenerator::translateCILInstruction(const std::string &line,
     }
 
     // 3. OPERACIONES BINARIAS: t0 = x > 5.000000
-    std::regex ro("^(\\w+)\\s*=\\s*(\\w+)\\s*([+\\-*/]|<=|>=|==|!=|<|>)\\s*(\\w+(?:\\.\\d+)?)$");
+    std::regex ro("^(\\w+)\\s*=\\s*(\\w+)\\s*([+*/-]|<=|>=|==|!=|<|>)\\s*(\\w+(?:\\.\\d+)?)$");
     if (std::regex_match(clean_line, match, ro))
     {
         std::string dest = match[1].str();
